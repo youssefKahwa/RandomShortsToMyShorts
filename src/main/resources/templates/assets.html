@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ressources - RandomShortsToMyShorts</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header th:replace="~{fragments/nav :: nav('assets')}"></header>
+<div class="container">
+    <h1>Ressources réutilisables</h1>
+    <p class="page-subtitle">Envoyez vos effets sonores et musiques une seule fois, puis indiquez le nom
+    du fichier dans un instructions.json (<code>soundEffects[].file</code> / <code>music.file</code>).</p>
+
+    <div class="card-grid">
+        <div class="card">
+            <h2>Effets sonores</h2>
+            <div th:if="${sfx.isEmpty()}" class="empty-state">Aucun fichier envoyé pour le moment.</div>
+            <ul th:unless="${sfx.isEmpty()}" style="padding-left:18px">
+                <li th:each="f : ${sfx}"><code th:text="${f}"></code></li>
+            </ul>
+            <form method="post" action="/assets/sfx" enctype="multipart/form-data" style="margin-top:12px">
+                <input type="file" name="file" accept="audio/*" required>
+                <div class="btn-row" style="margin-top:10px"><button class="btn btn-primary" type="submit">Envoyer un effet sonore</button></div>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Musiques de fond</h2>
+            <div th:if="${music.isEmpty()}" class="empty-state">Aucun fichier envoyé pour le moment.</div>
+            <ul th:unless="${music.isEmpty()}" style="padding-left:18px">
+                <li th:each="f : ${music}"><code th:text="${f}"></code></li>
+            </ul>
+            <form method="post" action="/assets/music" enctype="multipart/form-data" style="margin-top:12px">
+                <input type="file" name="file" accept="audio/*" required>
+                <div class="btn-row" style="margin-top:10px"><button class="btn btn-primary" type="submit">Envoyer une musique de fond</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>

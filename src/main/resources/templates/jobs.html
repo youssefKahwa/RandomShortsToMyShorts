@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tâches - RandomShortsToMyShorts</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        .job-list { display: flex; flex-direction: column; gap: 10px; }
+        .job-card img.job-thumb { object-fit: cover; }
+    </style>
+</head>
+<body>
+<header th:replace="~{fragments/nav :: nav('jobs')}"></header>
+<div class="container">
+    <h1>Tâches</h1>
+    <p class="page-subtitle" th:text="${jobs.size()} + ' au total'"></p>
+
+    <div th:if="${jobs.isEmpty()}" class="card empty-state">
+        Aucune tâche pour le moment. <a href="/">Commencez-en une</a>.
+    </div>
+
+    <div class="job-list">
+        <a th:each="job : ${jobs}" th:href="@{'/jobs/' + ${job.id}}" style="text-decoration:none;color:inherit">
+            <div class="job-card">
+                <img class="job-thumb" th:src="@{'/jobs/' + ${job.id} + '/thumbnail'}"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" alt="">
+                <div class="job-thumb" style="display:none">&#127909;</div>
+                <div class="meta">
+                    <div class="title" th:text="${job.label != null ? job.label : job.id}"></div>
+                    <div class="sub" th:text="${job.stage} + ' - ' + ${job.createdAt}"></div>
+                </div>
+                <span class="badge" th:classappend="'badge-' + ${job.status}" th:switch="${job.status.name()}">
+                    <th:block th:case="'QUEUED'">En attente</th:block>
+                    <th:block th:case="'PROCESSING'">En cours</th:block>
+                    <th:block th:case="'REVIEW'">À vérifier</th:block>
+                    <th:block th:case="'DONE'">Terminé</th:block>
+                    <th:block th:case="'FAILED'">Échec</th:block>
+                </span>
+            </div>
+        </a>
+    </div>
+</div>
+</body>
+</html>

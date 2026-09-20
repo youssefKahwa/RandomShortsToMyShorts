@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voix - RandomShortsToMyShorts</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        audio { height: 32px; max-width: 200px; }
+        .safe { color: var(--success); font-weight: 600; }
+        .unsafe { color: var(--danger); font-weight: 600; }
+        .missing { color: var(--text-muted); font-size: 12px; }
+    </style>
+</head>
+<body>
+<header th:replace="~{fragments/nav :: nav('voices')}"></header>
+<div class="container">
+    <h1>Voix</h1>
+    <p class="page-subtitle">Les licences proviennent de la fiche MODEL_CARD officielle de chaque voix Piper,
+    pas d'une supposition. "Autorisée" signifie utilisable sur une chaîne monétisée sans permission
+    supplémentaire. Copiez l'identifiant dans le champ <code>"voice"</code> d'un
+    <code>instructions.json</code>, ou dans celui d'un segment.</p>
+
+    <div class="card">
+        <table>
+            <tr><th>Voix</th><th>Genre</th><th>Qualité</th><th>Licence</th><th>Usage commercial</th><th>Écouter</th></tr>
+            <tr th:each="v : ${voices}">
+                <td><code th:text="${v.id}"></code></td>
+                <td th:text="${v.gender}"></td>
+                <td th:text="${v.quality}"></td>
+                <td th:text="${v.license}"></td>
+                <td>
+                    <span th:if="${v.commercialSafe}" class="safe">Autorisée</span>
+                    <span th:unless="${v.commercialSafe}" class="unsafe">À éviter - voir Licence</span>
+                </td>
+                <td>
+                    <audio th:if="${catalog.isDownloaded(v)}" controls th:src="@{'/voices/' + ${v.id} + '/sample'}"></audio>
+                    <span th:unless="${catalog.isDownloaded(v)}" class="missing"
+                          th:text="'Non téléchargée - python -m piper.download_voices ' + ${v.id} + ' --data-dir (votre dossier de voix)'"></span>
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<header th:fragment="nav(active)" class="topbar">
+    <div class="topbar-inner">
+        <span class="brand">RandomShortsToMyShorts</span>
+        <nav>
+            <a href="/" th:classappend="${active == 'home'} ? ' active'">Nouveau projet</a>
+            <a href="/jobs" th:classappend="${active == 'jobs'} ? ' active'">Tâches</a>
+            <a href="/assets" th:classappend="${active == 'assets'} ? ' active'">Ressources</a>
+            <a href="/voices" th:classappend="${active == 'voices'} ? ' active'">Voix</a>
+        </nav>
+    </div>
+</header>
+</body>
+</html>

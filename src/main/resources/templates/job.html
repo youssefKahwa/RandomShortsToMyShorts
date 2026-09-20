@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="'Tâche - ' + (${job.label} != null ? ${job.label} : ${job.id})">Tâche</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        .job-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        textarea#resubmitJson { min-height: 220px; }
+    </style>
+</head>
+<body>
+<header th:replace="~{fragments/nav :: nav('jobs')}"></header>
+<div class="container-narrow">
+    <div class="job-header">
+        <h1 style="margin:20px 0 0" th:text="${job.label != null ? job.label : job.id}"></h1>
+        <span id="statusBadge" class="badge" th:classappend="'badge-' + ${job.status}" th:attr="data-status=${job.status}"
+              th:switch="${job.status.name()}">
+            <th:block th:case="'QUEUED'">En attente</th:block>
+            <th:block th:case="'PROCESSING'">En cours</th:block>
+            <th:block th:case="'REVIEW'">À vérifier</th:block>
+            <th:block th:case="'DONE'">Terminé</th:block>
+            <th:block th:case="'FAILED'">Échec</th:block>
+        </span>
+    </div>
+    <p class="page-subtitle" id="stageText" th:text="${job.stage}"></p>
+
+    <div class="progress-line-row">
+        <div class="progress-bar"><div class="progress-fill" id="jobProgressFill"></div></div>
+        <span class="progress-pct" id="jobProgressPct">0%</span>
+    </div>
+
+    <div class="stepper" id="stepper"></div>
+
+    <div id="errorBox" class="alert alert-danger" th:if="${job.error != null}" th:text="${job.error}"></div>
+    <div id="errorBoxEmpty" th:if="${job.error == null}" hidden class="alert alert-danger"></div>
+
+    <div id="retrySection" class="card" th:hidden="${job.status.name() != 'FAILED'}">
+        <h2>Relancer</h2>
+        <p class="hint">Si l'échec vient d'un segment qui dépasse légèrement la durée réelle de la vidéo
+        (fréquent après une transcription automatique), c'est maintenant corrigé tout seul au relancement -
+        cliquez ci-dessous, aucune modification n'est nécessaire. Pour une autre cause, ajustez d'abord les
+        instructions dans "Modifier et relancer" plus bas.</p>
+        <form method="post" th:action="@{'/jobs/' + ${job.id} + '/resubmit'}">
+            <input type="hidden" name="instructions" th:value="${instructionsJson}"/>
+            <button class="btn btn-primary" type="submit">Relancer maintenant</button>
+        </form>
+    </div>
+
+    <div id="warningsBox" class="alert alert-warning" th:if="${!job.warnings.isEmpty()}">
+        <strong>Avertissements</strong>
+        <ul><li th:each="w : ${job.warnings}" th:text="${w}"></li></ul>
+    </div>
+    <div id="warningsBoxEmpty" th:if="${job.warnings.isEmpty()}" hidden class="alert alert-warning"><strong>Avertissements</strong><ul></ul></div>
+
+    <div id="reviewSection" class="card" th:if="${job.status.name() == 'REVIEW'}">
+        <h2>Aperçu</h2>
+        <video controls th:src="@{'/jobs/' + ${job.id} + '/preview'}"></video>
+        <p class="hint">La musique, les effets sonores, le flou et les sous-titres sont déjà intégrés à
+        cet aperçu exactement comme ils apparaîtront dans les exports finaux - seuls la résolution, la
+        durée et le débit changent ensuite selon la plateforme.</p>
+        <form method="post" th:action="@{'/jobs/' + ${job.id} + '/export'}">
+            <button class="btn btn-primary" type="submit">Générer les exports</button>
+        </form>
+    </div>
+    <div id="reviewSectionEmpty" th:if="${job.status.name() != 'REVIEW'}" hidden class="card">
+        <h2>Aperçu</h2>
+        <video controls></video>
+        <p class="hint">La musique, les effets sonores, le flou et les sous-titres sont déjà intégrés à
+        cet aperçu exactement comme ils apparaîtront dans les exports finaux - seuls la résolution, la
+        durée et le débit changent ensuite selon la plateforme.</p>
+        <form method="post"><button class="btn btn-primary" type="submit">Générer les exports</button></form>
+    </div>
+
+    <div id="doneSection" class="card" th:if="${job.status.name() == 'DONE'}">
+        <h2>Téléchargements</h2>
+        <div class="btn-row" id="downloadLinks">
+            <a class="btn btn-sm" th:each="entry : ${job.outputFiles}"
+               th:href="@{'/jobs/' + ${job.id} + '/download/' + ${entry.key}}"
+               th:text="${entry.key}"></a>
+        </div>
+        <div class="btn-row" style="margin-top:10px">
+            <a class="btn" th:href="@{'/jobs/' + ${job.id} + '/download-all'}">Tout télécharger (ZIP)</a>
+        </div>
+    </div>
+    <div id="doneSectionEmpty" th:if="${job.status.name() != 'DONE'}" hidden class="card">
+        <h2>Téléchargements</h2>
+        <div class="btn-row" id="downloadLinksEmpty"></div>
+        <div class="btn-row" style="margin-top:10px">
+            <a class="btn" th:href="@{'/jobs/' + ${job.id} + '/download-all'}">Tout télécharger (ZIP)</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Modifier et relancer</h2>
+        <p class="hint">Ajustez les instructions ci-dessous puis relancez - la vidéo d'origine est réutilisée,
+        aucun nouvel envoi n'est nécessaire.</p>
+        <form method="post" th:action="@{'/jobs/' + ${job.id} + '/resubmit'}">
+            <textarea id="resubmitJson" name="instructions" th:text="${instructionsJson}"></textarea>
+            <div class="btn-row" style="margin-top:10px">
+                <button class="btn" type="submit">Relancer comme nouvelle tâche</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script th:attr="data-job-id=${job.id}" id="jobStatusScript">
+(function () {
+    var jobId = document.getElementById('jobStatusScript').getAttribute('data-job-id');
+    var pollTimer = null;
+
+    var STATUS_LABELS = { QUEUED: 'En attente', PROCESSING: 'En cours', REVIEW: 'À vérifier', DONE: 'Terminé', FAILED: 'Échec' };
+
+    var STEP_DEFS = [
+        { key: 'queued', label: 'En attente' },
+        { key: 'compose', label: 'Composition' },
+        { key: 'review', label: 'Vérification' },
+        { key: 'export', label: 'Export' },
+        { key: 'done', label: 'Terminé' }
+    ];
+
+    // Finer-grained than the 5-step stepper above - maps each real backend stage string (see
+    // JobProcessor's touch() calls) to a percentage, so the bar moves within a stepper step too,
+    // not just when it flips to the next one.
+    var STAGE_PROGRESS = {
+        'en attente': 5,
+        'lecture des instructions': 10,
+        'transcription et traduction automatiques': 22,
+        'synthèse de la narration': 42,
+        'mixage audio': 58,
+        'composition de la vidéo': 72,
+        'prêt pour vérification': 85,
+        'génération des exports': 93,
+        'terminé': 100
+    };
+
+    function progressPercent(job) {
+        if (job.status === 'DONE') return 100;
+        if (job.status === 'REVIEW') return 85;
+        if (STAGE_PROGRESS.hasOwnProperty(job.stage)) return STAGE_PROGRESS[job.stage];
+        return job.status === 'QUEUED' ? 5 : 50;
+    }
+
+    function renderProgress(job) {
+        var pct = progressPercent(job);
+        var fill = document.getElementById('jobProgressFill');
+        fill.style.width = pct + '%';
+        fill.classList.toggle('progress-fill-error', job.status === 'FAILED');
+        document.getElementById('jobProgressPct').textContent = pct + '%';
+    }
+
+    function currentStepIndex(job) {
+        if (job.status === 'FAILED') return -1;
+        if (job.status === 'QUEUED') return 0;
+        if (job.status === 'REVIEW') return 2;
+        if (job.status === 'DONE') return 4;
+        if (job.status === 'PROCESSING') {
+            return (job.stage === 'génération des exports') ? 3 : 1;
+        }
+        return 0;
+    }
+
+    function renderStepper(job) {
+        var idx = currentStepIndex(job);
+        var html = STEP_DEFS.map(function (s, i) {
+            var cls = 'step';
+            var mark = i + 1;
+            if (job.status === 'FAILED') {
+                cls += '';
+            } else if (i < idx) { cls += ' done'; mark = '✓'; }
+            else if (i === idx) { cls += ' active'; }
+            var sep = i < STEP_DEFS.length - 1 ? '<span class="step-line"></span>' : '';
+            return '<span class="' + cls + '"><span class="dot">' + mark + '</span>' + s.label + '</span>' + sep;
+        }).join('');
+        document.getElementById('stepper').innerHTML = html;
+    }
+
+    function escapeHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function swap(liveId, emptyId) {
+        var live = document.getElementById(liveId);
+        var empty = document.getElementById(emptyId);
+        return { live: live, empty: empty };
+    }
+
+    function render(job) {
+        var badge = document.getElementById('statusBadge');
+        badge.className = 'badge badge-' + job.status;
+        badge.setAttribute('data-status', job.status);
+        badge.textContent = STATUS_LABELS[job.status] || job.status;
+        document.getElementById('stageText').textContent = job.stage;
+        renderStepper(job);
+        renderProgress(job);
+
+        if (job.error) {
+            document.getElementById('errorBoxEmpty').hidden = false;
+            document.getElementById('errorBoxEmpty').textContent = job.error;
+            if (document.getElementById('errorBox')) document.getElementById('errorBox').hidden = true;
+        }
+        document.getElementById('retrySection').hidden = (job.status !== 'FAILED');
+
+        var warnUl = document.querySelector('#warningsBoxEmpty ul');
+        if (job.warnings && job.warnings.length) {
+            document.getElementById('warningsBoxEmpty').hidden = false;
+            if (document.getElementById('warningsBox')) document.getElementById('warningsBox').hidden = true;
+            warnUl.innerHTML = job.warnings.map(function (w) { return '<li>' + escapeHtml(w) + '</li>'; }).join('');
+        }
+
+        var review = swap('reviewSection', 'reviewSectionEmpty');
+        var done = swap('doneSection', 'doneSectionEmpty');
+        if (job.status === 'REVIEW') {
+            if (review.live) review.live.hidden = false;
+            else review.empty.hidden = false;
+        } else if (review.live) review.live.hidden = true;
+
+        if (job.status === 'DONE') {
+            if (done.live) {
+                done.live.hidden = false;
+            } else {
+                done.empty.hidden = false;
+                var links = document.getElementById('downloadLinksEmpty');
+                links.innerHTML = Object.keys(job.outputFiles || {}).map(function (p) {
+                    return '<a class="btn btn-sm" href="/jobs/' + jobId + '/download/' + p + '">' + p + '</a>';
+                }).join(' ');
+            }
+        } else if (done.live) done.live.hidden = true;
+
+        if (job.status === 'QUEUED' || job.status === 'PROCESSING') {
+            pollTimer = setTimeout(poll, 2000);
+        }
+    }
+
+    function poll() {
+        fetch('/jobs/' + jobId + '/status')
+            .then(function (r) { return r.json(); })
+            .then(render)
+            .catch(function () { pollTimer = setTimeout(poll, 4000); });
+    }
+
+    // Server already rendered the correct state for this load; data-status carries the real (English)
+    // enum value separately from the French label so this bootstrap read stays correct regardless of
+    // the displayed language - just start/continue polling if active.
+    var initialStatus = document.getElementById('statusBadge').getAttribute('data-status');
+    var initialJob = { status: initialStatus, stage: document.getElementById('stageText').textContent.trim() };
+    renderStepper(initialJob);
+    renderProgress(initialJob);
+    if (initialStatus === 'QUEUED' || initialStatus === 'PROCESSING') {
+        pollTimer = setTimeout(poll, 2000);
+    }
+})();
+</script>
+</body>
+</html>

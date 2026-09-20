@@ -1,0 +1,86 @@
+server:
+  port: 8080
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2GB
+      max-request-size: 2GB
+  thymeleaf:
+    cache: false
+
+app:
+  paths:
+    data: ./data
+    assets: ./assets
+  tts:
+    provider: piper
+    max-retries: 3
+    retry-backoff-ms: 1500
+    piper:
+      # Installed via "pip install piper-tts" (see yt-auto's setup-piper.ps1) - not on PATH,
+      # so the pip Scripts dir is given explicitly here.
+      binary: C:/Users/anasa/AppData/Roaming/Python/Python312/Scripts/piper.exe
+      # Reusing yt-auto's already-downloaded voice models instead of a second download.
+      voices-dir: C:/Users/anasa/OneDrive/Desktop/bipath_Youtube/yt-auto/voices
+      # Pre-made sample clips for the /voices preview page - shipped alongside yt-auto's download.
+      samples-dir: C:/Users/anasa/OneDrive/Desktop/bipath_Youtube/yt-auto/voice_samples
+      # Public-domain (LibriVox), male - see /voices for the full catalog with licenses and audio
+      # previews before picking a different one. The well-known "ryan" high-quality male voice is
+      # deliberately NOT the default here: it's CC BY-NC-SA (non-commercial only).
+      default-voice: en_US-john-medium
+      voices: {}
+  fit:
+    min-rate: 0.85
+    max-rate: 1.15
+  auto-script:
+    # Isolated venv (see scripts/setup-auto-script.ps1) - the global Python install already used
+    # for Piper had a corrupted package, so this app's ML tooling lives separately.
+    python-binary: ./.venv-ml/Scripts/python.exe
+    script-path: ./scripts/transcribe_translate.py
+    whisper-model: small
+    device: cpu
+    # Which translation engine "Automatique" mode uses by default (a job can override this):
+    #   argos       - free, offline, always available (default)
+    #   claude-code - uses your existing claude.ai subscription via the local Claude Code CLI
+    #   claude      - the paid Anthropic API, needs ANTHROPIC_API_KEY
+    translation-engine: argos
+    # Version-specific path - changes whenever the Claude Code VS Code extension updates. Find it
+    # under .vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe
+    claude-code-binary: C:/Users/anasa/.vscode/extensions/anthropic.claude-code-2.1.274-win32-x64/resources/native-binary/claude.exe
+    claude-code-model: sonnet
+  pipeline:
+    ffmpeg-binary: ffmpeg
+    ffprobe-binary: ffprobe
+    ffmpeg-loglevel: error
+    max-concurrent-jobs: 2
+  video:
+    width: 1080
+    height: 1920
+    fps: 30
+    crf: 20
+    preset: medium
+    codec: libx264
+    pixel-format: yuv420p
+    audio-bitrate: 192k
+  platforms:
+    default:
+      max-duration-seconds: 0
+      crf: 0
+      audio-bitrate: 192k
+    youtube:
+      max-duration-seconds: 60
+      crf: 20
+      audio-bitrate: 192k
+    tiktok:
+      max-duration-seconds: 60
+      crf: 22
+      audio-bitrate: 192k
+    instagram:
+      max-duration-seconds: 90
+      crf: 20
+      audio-bitrate: 192k
+
+logging:
+  level:
+    com.rstms: info

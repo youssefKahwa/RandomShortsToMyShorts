@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nouveau projet - RandomShortsToMyShorts</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        fieldset { border: 1px solid var(--border); border-radius: var(--radius); margin: 18px 0 0; padding: 14px 16px 16px; }
+        legend { font-size: 13px; font-weight: 700; padding: 0 6px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+        .dropzone {
+            border: 2px dashed var(--border); border-radius: var(--radius); padding: 22px; text-align: center;
+            color: var(--text-muted); font-size: 13.5px; cursor: pointer; background: var(--surface-2);
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .dropzone:hover { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, var(--surface-2)); }
+        .dropzone.drag { border-color: var(--primary); color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface-2)); }
+        .dropzone input { display: none; }
+        #validateResult:empty { display: none; }
+    </style>
+</head>
+<body>
+<header th:replace="~{fragments/nav :: nav('home')}"></header>
+<div class="container">
+    <div class="card" id="wizardTop" style="margin-top:24px">
+            <h2>Nouveau projet de localisation</h2>
+
+            <div class="wizard-nav" id="wizardNav"></div>
+            <div id="wizStepError" class="alert alert-danger" hidden></div>
+            <div id="uploadProgress" class="progress-wrap" hidden>
+                <div class="progress-bar"><div class="progress-fill" id="uploadProgressFill"></div></div>
+                <div class="progress-label" id="uploadProgressLabel"></div>
+            </div>
+
+            <form id="newJobForm" novalidate>
+                <!-- Étape 1 : catégorie -->
+                <section class="wizard-step" data-step="1">
+                    <h3 class="step-title">🏷️ Catégorie de contenu</h3>
+                    <p class="hint">Ce choix ne change rien pour l'instant - des réglages spécifiques à
+                    chaque catégorie (effets, musique, présentation...) viendront bientôt s'ajouter dessous.</p>
+
+                    <div class="mode-cards">
+                        <label class="mode-card" data-card="anime">
+                            <input type="radio" name="contentCategory" value="anime">
+                            <div class="mc-title">🎌 WeAnimePeaks</div>
+                            <div class="mc-desc">Extraits ou moments issus d'anime.</div>
+                        </label>
+                        <label class="mode-card" data-card="football">
+                            <input type="radio" name="contentCategory" value="football">
+                            <div class="mc-title">⚽ FootbalSoccerRush</div>
+                            <div class="mc-desc">Buts, résumés, moments de match.</div>
+                        </label>
+                    </div>
+
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn btn-primary" onclick="wizNext()">Suivant</button>
+                    </div>
+                </section>
+
+                <!-- Étape 2 : type de vidéo d'origine -->
+                <section class="wizard-step" data-step="2" hidden>
+                    <h3 class="step-title">🎞️ Type de vidéo d'origine</h3>
+                    <p class="hint">Chaque style de vidéo se traite différemment. "Incrustation fond vert" est
+                    pleinement fonctionnel ; les autres styles sont pour l'instant seulement enregistrés, en
+                    attendant leurs réglages dédiés.</p>
+
+                    <div id="videoStyleAnime" hidden>
+                        <div class="mode-cards">
+                            <label class="mode-card" data-card="anime_overlay_text">
+                                <input type="radio" name="videoStyle" value="anime_overlay_text">
+                                <div class="mc-title">Texte incrusté en haut</div>
+                                <div class="mc-desc">Le clip anime reste au centre tel quel - seul le texte arabe
+                                affiché en haut est retiré et remplacé par sa version anglaise.</div>
+                            </label>
+                            <label class="mode-card" data-card="anime_dub_audio">
+                                <input type="radio" name="videoStyle" value="anime_dub_audio">
+                                <div class="mc-title">Voix à redoubler</div>
+                                <div class="mc-desc">Un personnage parle en arabe dans la vidéo - la voix est
+                                remplacée par une narration anglaise (comme la narration automatique).</div>
+                            </label>
+                            <label class="mode-card" data-card="green_screen_overlay">
+                                <input type="radio" name="videoStyle" value="green_screen_overlay">
+                                <div class="mc-title">🟩 Incrustation fond vert</div>
+                                <div class="mc-desc">Un clip anime s'affiche sur l'écran vert d'une vidéo de fond
+                                (ex. votre setup) - nécessite une seconde vidéo à l'étape suivante.</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="videoStyleFootball" hidden>
+                        <p class="hint">D'autres styles spécifiques au football arrivent bientôt.</p>
+                        <div class="mode-cards">
+                            <label class="mode-card" data-card="green_screen_overlay_fb">
+                                <input type="radio" name="videoStyle" value="green_screen_overlay">
+                                <div class="mc-title">🟩 Incrustation fond vert</div>
+                                <div class="mc-desc">Un clip (but, résumé...) s'affiche sur l'écran vert d'une vidéo
+                                de fond (ex. votre setup) - nécessite une seconde vidéo à l'étape suivante.</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn" onclick="wizBack()">Retour</button>
+                        <button type="button" class="btn btn-primary" onclick="wizNext()">Suivant</button>
+                    </div>
+                </section>
+
+                <!-- Étape 3 : vidéo -->
+                <section class="wizard-step" data-step="3" hidden>
+                    <h3 class="step-title">🎬 Vidéo source</h3>
+                    <label class="field-label" for="jobLabel">Nom (optionnel)</label>
+                    <input type="text" id="jobLabel" placeholder="ex. Résumé du match de mardi">
+
+                    <label class="field-label">Vidéo d'origine</label>
+                    <div class="dropzone" id="dropzone">
+                        <input type="file" id="videoFile" accept="video/*" required>
+                        <span id="dropzoneText">Cliquez pour choisir une vidéo, ou déposez-la ici</span>
+                    </div>
+
+                    <div id="overlayVideoField" hidden style="margin-top:20px">
+                        <label class="field-label" for="screenCount">Combien d'écrans (vert / bleu / rouge) sur cette vidéo ?</label>
+                        <select id="screenCount">
+                            <option value="1">1 - juste l'écran vert</option>
+                            <option value="2">2 - vert + bleu</option>
+                            <option value="3">3 - vert + bleu + rouge</option>
+                        </select>
+                        <p class="hint">L'écran vert est obligatoire et détermine la durée de la vidéo finale (elle
+                        boucle sinon). Les écrans supplémentaires bouclent ou se raccourcissent pour durer pareil.
+                        Chaque vidéo est ajustée à la taille de son écran sans être déformée - si les proportions ne
+                        correspondent pas exactement, de fines bandes noires comblent l'espace restant, comme sur
+                        YouTube. Le format final (vertical, type Shorts/Reels) de la vidéo de fond n'est jamais changé.</p>
+
+                        <div style="margin-top:14px">
+                            <label class="field-label">Vidéo pour l'écran vert</label>
+                            <div class="dropzone" id="overlayDropzoneGreen">
+                                <input type="file" id="overlayVideoFileGreen" accept="video/*">
+                                <span id="overlayDropzoneTextGreen">Cliquez pour choisir la vidéo (écran vert), ou déposez-la ici</span>
+                            </div>
+                        </div>
+                        <div id="overlayFieldBlue" hidden style="margin-top:14px">
+                            <label class="field-label">Vidéo pour l'écran bleu</label>
+                            <div class="dropzone" id="overlayDropzoneBlue">
+                                <input type="file" id="overlayVideoFileBlue" accept="video/*">
+                                <span id="overlayDropzoneTextBlue">Cliquez pour choisir la vidéo (écran bleu), ou déposez-la ici</span>
+                            </div>
+                        </div>
+                        <div id="overlayFieldRed" hidden style="margin-top:14px">
+                            <label class="field-label">Vidéo pour l'écran rouge</label>
+                            <div class="dropzone" id="overlayDropzoneRed">
+                                <input type="file" id="overlayVideoFileRed" accept="video/*">
+                                <span id="overlayDropzoneTextRed">Cliquez pour choisir la vidéo (écran rouge), ou déposez-la ici</span>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:20px">
+                            <label class="field-label">Placez chaque écran directement sur l'aperçu</label>
+                            <p class="hint">Glissez pour déplacer, tirez un coin pour redimensionner - par défaut
+                            l'écran reste un simple rectangle, ce qui couvre la plupart des cas. Si votre écran est
+                            filmé de biais (pas droit à 0/90°), cliquez sur "Ajuster l'angle" pour tracer chaque
+                            coin indépendamment ; la vidéo s'ajuste en direct à la forme tracée.</p>
+                            <div id="screenEditorStage" class="screen-editor-stage">
+                                <video id="screenEditorVideo" muted playsinline></video>
+                                <template id="tpl-quad-editor">
+                                    <div class="quad-editor" hidden>
+                                        <div class="quad-stage">
+                                            <div class="quad-fit">
+                                                <video class="screen-box-video" muted loop playsinline></video>
+                                                <div class="screen-box-empty"></div>
+                                            </div>
+                                        </div>
+                                        <svg class="quad-svg"><polygon class="quad-outline"></polygon></svg>
+                                        <span class="screen-box-label"><i></i><b></b></span>
+                                        <span class="screen-box-dims"></span>
+                                        <button type="button" class="quad-mode-toggle"></button>
+                                        <div class="quad-handle" data-corner="topLeft"></div>
+                                        <div class="quad-handle" data-corner="topRight"></div>
+                                        <div class="quad-handle" data-corner="bottomRight"></div>
+                                        <div class="quad-handle" data-corner="bottomLeft"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <label class="field-label" style="margin-top:22px">Comment voulez-vous configurer cette tâche ?</label>
+                    <div class="mode-cards">
+                        <label class="mode-card selected" data-card="wizard">
+                            <input type="radio" name="topMode" value="wizard" checked>
+                            <div class="mc-title">Étapes guidées</div>
+                            <div class="mc-desc">Parcourez la narration, les effets, la musique, le flou et les plateformes une étape à la fois.</div>
+                        </label>
+                        <label class="mode-card" data-card="advanced">
+                            <input type="radio" name="topMode" value="advanced">
+                            <div class="mc-title">JSON avancé</div>
+                            <div class="mc-desc">Écrivez ou collez directement un instructions.json - pour les tâches scriptées ou répétitives.</div>
+                        </label>
+                    </div>
+
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn btn-primary" onclick="wizStartFromVideoStep()">Suivant</button>
+                    </div>
+                </section>
+
+                <!-- Étape 4 : narration -->
+                <section class="wizard-step" data-step="4" hidden>
+                    <h3 class="step-title">🎙️ Narration <span class="optional-tag">Optionnel</span></h3>
+                    <p class="hint">Redoublez certaines parties de la vidéo en anglais. Passez cette étape si
+                    vous ajoutez seulement de la musique, des effets ou du flou par-dessus l'audio d'origine.</p>
+
+                    <div class="mode-cards">
+                        <label class="mode-card selected" data-card="skip">
+                            <input type="radio" name="narrationMode" value="skip" checked>
+                            <div class="mc-title">Aucune narration</div>
+                            <div class="mc-desc">Conserve l'audio d'origine tel quel.</div>
+                        </label>
+                        <label class="mode-card" data-card="auto">
+                            <input type="radio" name="narrationMode" value="auto">
+                            <div class="mc-title">Automatique (recommandé)</div>
+                            <div class="mc-desc">L'app transcrit et traduit toute seule - choisissez juste la langue d'origine.</div>
+                        </label>
+                        <label class="mode-card" data-card="timed">
+                            <input type="radio" name="narrationMode" value="timed">
+                            <div class="mc-title">Script minuté</div>
+                            <div class="mc-desc">Envoyez le script dans la langue d'origine (.srt) pour son minutage, puis collez les lignes en anglais.</div>
+                        </label>
+                        <label class="mode-card" data-card="manual">
+                            <input type="radio" name="narrationMode" value="manual">
+                            <div class="mc-title">Segments manuels</div>
+                            <div class="mc-desc">Saisissez vous-même le début, la fin et le texte anglais de chaque segment.</div>
+                        </label>
+                    </div>
+
+                    <div id="narrationAuto" hidden>
+                        <label class="field-label" for="autoLang">Langue parlée dans la vidéo d'origine</label>
+                        <select id="autoLang">
+                            <option value="ar">Arabe</option>
+                            <option value="fr">Français</option>
+                            <option value="es">Espagnol</option>
+                            <option value="pt">Portugais</option>
+                            <option value="de">Allemand</option>
+                            <option value="it">Italien</option>
+                            <option value="ru">Russe</option>
+                            <option value="tr">Turc</option>
+                            <option value="hi">Hindi</option>
+                            <option value="zh">Chinois</option>
+                            <option value="__custom__">Autre (saisir un code ISO 639-1)...</option>
+                        </select>
+                        <input type="text" id="autoLangCustom" placeholder="ex. nl" hidden>
+                        <p class="hint">La vidéo est transcrite (avec minutage réel) puis traduite en anglais,
+                        entièrement en local - aucun script à préparer. Nécessite d'avoir exécuté
+                        <code>scripts/setup-auto-script.ps1</code> une fois.</p>
+
+                        <label class="field-label" style="margin-top:16px">Moteur de traduction</label>
+                        <div class="mode-cards">
+                            <label class="mode-card selected" data-card="argos">
+                                <input type="radio" name="translationEngine" value="argos" checked>
+                                <div class="mc-title">Argos Translate</div>
+                                <div class="mc-desc">Gratuit, hors ligne. Moins précis pour les noms propres ou le vocabulaire spécifique.</div>
+                            </label>
+                            <label class="mode-card" data-card="claude-code">
+                                <input type="radio" name="translationEngine" value="claude-code">
+                                <div class="mc-title">Claude Code</div>
+                                <div class="mc-desc">Meilleure qualité, utilise votre abonnement claude.ai existant (Pro/Max) - pas de nouveau coût. Nécessite Claude Code installé et connecté sur cette machine.</div>
+                            </label>
+                            <label class="mode-card" data-card="claude">
+                                <input type="radio" name="translationEngine" value="claude">
+                                <div class="mc-title">Claude (API)</div>
+                                <div class="mc-desc">Même qualité, appel plus léger. Nécessite une clé API Anthropic séparée (payante, distincte d'un abonnement claude.ai) - coût négligeable par vidéo.</div>
+                            </label>
+                        </div>
+                        <div id="claudeContextField" hidden>
+                            <label class="field-label" for="claudeContext">Contexte (optionnel)</label>
+                            <input type="text" id="claudeContext" placeholder="ex. commentaire sportif de football, ton énergique">
+                            <p class="hint">Aide Claude à choisir le bon ton et vocabulaire.</p>
+                        </div>
+                    </div>
+
+                    <div id="narrationTimed" hidden>
+                        <label class="field-label">Étape A - script dans la langue d'origine (.srt)</label>
+                        <input type="file" id="srtFile" accept=".srt,text/plain">
+                        <p class="hint">Pas de fichier ? Collez plutôt le contenu du SRT :</p>
+                        <textarea id="srtPaste" rows="6" placeholder="Collez le contenu du .srt ici"></textarea>
+                        <div class="example-box" id="srtExample">1
+00:00:00,000 --&gt; 00:00:04,200
+مرحبا بكم في القناة، اليوم لدينا شيء مميز
+
+2
+00:00:04,200 --&gt; 00:00:09,800
+هذه اللقطة القادمة لا تصدق</div>
+
+                        <label class="field-label" style="margin-top:20px">Étape B - script en anglais</label>
+                        <p class="hint">Une ligne par réplique ci-dessus, dans le même ordre (ligne 1 = réplique 1, ligne 2 = réplique 2, ...).</p>
+                        <textarea id="englishLines" rows="6" placeholder="Welcome back to the channel, today we have something special!&#10;This next play is unbelievable."></textarea>
+                        <div class="example-box">Welcome back to the channel, today we have something special!
+This next play is unbelievable.</div>
+
+                        <div id="pairingPreview"></div>
+                    </div>
+
+                    <div id="narrationManual" hidden>
+                        <div class="row-list" id="segmentsList"></div>
+                        <div class="btn-row" style="margin-top:10px">
+                            <button type="button" class="btn btn-sm" id="addSegment">+ Ajouter un segment</button>
+                        </div>
+                    </div>
+
+                    <div id="narrationOptions" hidden>
+                        <label class="field-label" for="jobVoice">Voix</label>
+                        <select id="jobVoice">
+                            <option value="">Utiliser la voix par défaut</option>
+                            <option th:each="v : ${safeVoices}" th:value="${v.id}" th:text="${v.label} + ' - ' + ${v.gender} + ', ' + ${v.quality}"></option>
+                            <option value="__custom__">Autre (saisir un identifiant)...</option>
+                        </select>
+                        <input type="text" id="jobVoiceCustom" placeholder="ex. en_US-ryan-high#2" hidden>
+                        <p class="hint">Consultez <a href="/voices" target="_blank">/voices</a> pour l'écouter et vérifier sa licence d'abord.</p>
+                        <div class="checkbox-row"><input type="checkbox" id="captionsCb" checked><label for="captionsCb">Incruster les sous-titres</label></div>
+                    </div>
+
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn" onclick="wizBack()">Retour</button>
+                        <button type="button" class="btn" onclick="wizSkipNarration()">Passer cette étape</button>
+                        <button type="button" class="btn btn-primary" onclick="wizNext()">Suivant</button>
+                    </div>
+                </section>
+
+                <!-- Étape 5 : effets sonores -->
+                <section class="wizard-step" data-step="5" hidden>
+                    <h3 class="step-title">🔊 Effets sonores <span class="optional-tag">Optionnel</span></h3>
+                    <p class="hint">Extraits ponctuels (whoosh, ding...) ajoutés par-dessus à un instant précis.</p>
+                    <div class="row-list" id="effectsList"></div>
+                    <div class="btn-row" style="margin-top:10px">
+                        <button type="button" class="btn btn-sm" id="addEffect" th:disabled="${sfxFiles.isEmpty()}">+ Ajouter un effet sonore</button>
+                    </div>
+                    <p class="hint" th:if="${sfxFiles.isEmpty()}">Aucun effet sonore envoyé pour le moment - ajoutez-en sur la page <a href="/assets" target="_blank">Ressources</a>, puis revenez.</p>
+
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn" onclick="wizBack()">Retour</button>
+                        <button type="button" class="btn" onclick="wizSkipEffects()">Passer cette étape</button>
+                        <button type="button" class="btn btn-primary" onclick="wizNext()">Suivant</button>
+                    </div>
+                </section>
+
+                <!-- Étape 6 : musique -->
+                <section class="wizard-step" data-step="6" hidden>
+                    <h3 class="step-title">🎵 Musique de fond <span class="optional-tag">Optionnel</span></h3>
+                    <div class="checkbox-row"><input type="checkbox" id="musicEnabled" th:disabled="${musicFiles.isEmpty()}"><label for="musicEnabled">Ajouter une musique de fond</label></div>
+                    <div id="musicFields" hidden>
+                        <div class="field-grid">
+                            <div>
+                                <label class="field-label">Piste</label>
+                                <select id="musicFile">
+                                    <option th:each="f : ${musicFiles}" th:value="${f}" th:text="${f}"></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="field-label">Volume (0-1)</label>
+                                <input type="number" id="musicVolume" step="0.01" min="0" max="1" value="0.15">
+                            </div>
+                        </div>
+                    </div>
+                    <p class="hint" th:if="${musicFiles.isEmpty()}">Aucune musique envoyée pour le moment - ajoutez-en une sur la page <a href="/assets" target="_blank">Ressources</a>, puis revenez.</p>
+
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn" onclick="wizBack()">Retour</button>
+                        <button type="button" class="btn" onclick="wizSkipMusic()">Passer cette étape</button>
+                        <button type="button" class="btn btn-primary" onclick="wizNext()">Suivant</button>
+                    </div>
+                </section>
+
+                <!-- Étape 7 : flou -->
+                <section class="wizard-step" data-step="7" hidden>
+                    <h3 class="step-title">🌫️ Zones de flou <span class="optional-tag">Optionnel</span></h3>
+                    <p class="hint">Floute un rectangle fixe (par ex. un filigrane ou un logo) pendant une période donnée. Les coordonnées sont en pixels dans la vidéo source.</p>
+                    <div class="row-list" id="blurList"></div>
+                    <div class="btn-row" style="margin-top:10px">
+                        <button type="button" class="btn btn-sm" id="addBlur">+ Ajouter une zone de flou</button>
+                    </div>
+
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn" onclick="wizBack()">Retour</button>
+                        <button type="button" class="btn" onclick="wizSkipBlur()">Passer cette étape</button>
+                        <button type="button" class="btn btn-primary" onclick="wizNext()">Suivant</button>
+                    </div>
+                </section>
+
+                <!-- Étape 8 : plateformes -->
+                <section class="wizard-step" data-step="8" hidden>
+                    <h3 class="step-title">📱 Plateformes et derniers réglages</h3>
+                    <div class="checkbox-row"><input type="checkbox" id="loudnessCb" checked><label for="loudnessCb">Normaliser le volume</label></div>
+
+                    <label class="field-label">Exporter pour</label>
+                    <div class="checkbox-row"><input type="checkbox" class="platform-cb" value="youtube" checked id="pYoutube"><label for="pYoutube">YouTube</label></div>
+                    <div class="checkbox-row"><input type="checkbox" class="platform-cb" value="tiktok" checked id="pTiktok"><label for="pTiktok">TikTok</label></div>
+                    <div class="checkbox-row"><input type="checkbox" class="platform-cb" value="instagram" checked id="pInstagram"><label for="pInstagram">Instagram</label></div>
+
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn" onclick="wizBack()">Retour</button>
+                        <button type="button" class="btn btn-primary" onclick="wizNext()">Suivant</button>
+                    </div>
+                </section>
+
+                <!-- Étape 9 : résumé -->
+                <section class="wizard-step" data-step="9" hidden>
+                    <h3 class="step-title">✅ Résumé et envoi</h3>
+                    <dl class="summary-list" id="summaryBox"></dl>
+
+                    <div id="validateResult"></div>
+
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn" onclick="wizBack()">Retour</button>
+                        <button type="button" class="btn" id="validateBtn">Vérifier</button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">Envoyer la tâche</button>
+                    </div>
+                </section>
+
+                <!-- Écran JSON avancé (contourne les étapes 4-9) -->
+                <section id="advancedScreen" hidden>
+                    <h3 class="step-title">🧩 Avancé : instructions JSON</h3>
+                    <textarea id="rawJson" rows="16">{
+  "voice": null,
+  "captions": true,
+  "loudnessNormalize": true,
+  "platforms": ["youtube", "tiktok", "instagram"],
+  "segments": [
+    { "start": 0.0, "end": 4.0, "text": "Welcome back to the channel!" }
+  ],
+  "soundEffects": [],
+  "blurRegions": []
+}</textarea>
+                    <div id="validateResultAdvanced"></div>
+                    <div class="wizard-controls btn-row">
+                        <button type="button" class="btn" onclick="wizBackToVideoStep()">Retour</button>
+                        <button type="button" class="btn" id="validateBtnAdvanced">Vérifier</button>
+                        <button type="submit" class="btn btn-primary" id="submitBtnAdvanced">Envoyer la tâche</button>
+                    </div>
+                </section>
+            </form>
+    </div>
+</div>
+
+<template id="tpl-segment">
+    <div class="row-item">
+        <div class="row-fields">
+            <div><label class="field-label">Début (s)</label><input type="number" step="0.1" min="0" class="seg-start"></div>
+            <div><label class="field-label">Fin (s)</label><input type="number" step="0.1" min="0" class="seg-end"></div>
+            <div class="wide"><label class="field-label">Texte anglais</label><input type="text" class="seg-text"></div>
+            <div class="wide">
+                <label class="field-label">Voix (remplacement)</label>
+                <select class="seg-voice">
+                    <option value="">Utiliser la voix par défaut</option>
+                    <option th:each="v : ${safeVoices}" th:value="${v.id}" th:text="${v.label} + ' (' + ${v.id} + ')'"></option>
+                </select>
+            </div>
+        </div>
+        <button type="button" class="row-remove" onclick="this.closest('.row-item').remove()" title="Supprimer">&times;</button>
+    </div>
+</template>
+
+<template id="tpl-effect">
+    <div class="row-item">
+        <div class="row-fields">
+            <div><label class="field-label">Début (s)</label><input type="number" step="0.1" min="0" class="fx-start"></div>
+            <div><label class="field-label">Volume</label><input type="number" step="0.05" min="0" value="1.0" class="fx-volume"></div>
+            <div class="wide">
+                <label class="field-label">Fichier</label>
+                <select class="fx-file">
+                    <option th:each="f : ${sfxFiles}" th:value="${f}" th:text="${f}"></option>
+                </select>
+            </div>
+        </div>
+        <button type="button" class="row-remove" onclick="this.closest('.row-item').remove()" title="Supprimer">&times;</button>
+    </div>
+</template>
+
+<template id="tpl-blur">
+    <div class="row-item">
+        <div class="row-fields">
+            <div><label class="field-label">Début (s)</label><input type="number" step="0.1" min="0" class="blur-start"></div>
+            <div><label class="field-label">Fin (s)</label><input type="number" step="0.1" min="0" class="blur-end"></div>
+            <div><label class="field-label">X</label><input type="number" step="1" min="0" class="blur-x"></div>
+            <div><label class="field-label">Y</label><input type="number" step="1" min="0" class="blur-y"></div>
+            <div><label class="field-label">Largeur</label><input type="number" step="1" min="1" class="blur-w"></div>
+            <div><label class="field-label">Hauteur</label><input type="number" step="1" min="1" class="blur-h"></div>
+            <div><label class="field-label">Intensité</label><input type="number" step="1" min="1" value="18" class="blur-strength"></div>
+        </div>
+        <button type="button" class="row-remove" onclick="this.closest('.row-item').remove()" title="Supprimer">&times;</button>
+    </div>
+</template>
+
+<script>
+(function () {
+    var TOTAL_STEPS = 9;
+    var currentStep = 1;
+    var maxStepReached = 1;
+    var STEP_NAMES = ['Catégorie', 'Type de vidéo', 'Vidéo', 'Narration', 'Effets', 'Musique', 'Flou', 'Plateformes', 'Résumé'];
+    var cachedCues = [];
+    var screenEditorVideo = document.getElementById('screenEditorVideo');
+
+    function addRow(listId, tplId) {
+        var tpl = document.getElementById(tplId);
+        document.getElementById(listId).appendChild(tpl.content.cloneNode(true));
+    }
+    document.getElementById('addSegment').addEventListener('click', function () { addRow('segmentsList', 'tpl-segment'); });
+    document.getElementById('addEffect').addEventListener('click', function () { addRow('effectsList', 'tpl-effect'); });
+    document.getElementById('addBlur').addEventListener('click', function () { addRow('blurList', 'tpl-blur'); });
+    addRow('segmentsList', 'tpl-segment');
+
+    // ---- mode-card visuals (video-step top mode, narration mode) ----
+    function syncModeCardsFromRadios(group) {
+        document.querySelectorAll('.mode-card').forEach(function (c) {
+            if (c.querySelector('input').name === group) c.classList.toggle('selected', c.querySelector('input').checked);
+        });
+    }
+    document.querySelectorAll('.mode-card').forEach(function (card) {
+        card.addEventListener('click', function () {
+            var input = card.querySelector('input');
+            input.checked = true;
+            syncModeCardsFromRadios(input.name);
+            input.dispatchEvent(new Event('change'));
+        });
+    });
+
+    var jobVoice = document.getElementById('jobVoice');
+    var jobVoiceCustom = document.getElementById('jobVoiceCustom');
+    jobVoice.addEventListener('change', function () { jobVoiceCustom.hidden = jobVoice.value !== '__custom__'; });
+
+    var autoLang = document.getElementById('autoLang');
+    var autoLangCustom = document.getElementById('autoLangCustom');
+    autoLang.addEventListener('change', function () { autoLangCustom.hidden = autoLang.value !== '__custom__'; });
+
+    document.querySelectorAll('input[name=translationEngine]').forEach(function (r) {
+        r.addEventListener('change', function () {
+            document.getElementById('claudeContextField').hidden = (this.value !== 'claude' && this.value !== 'claude-code');
+        });
+    });
+
+    var musicEnabled = document.getElementById('musicEnabled');
+    document.getElementById('musicFields').hidden = true;
+    musicEnabled.addEventListener('change', function () { document.getElementById('musicFields').hidden = !musicEnabled.checked; });
+
+    // Switching category invalidates any videoStyle already picked for the other category (its
+    // radio group is shared across both category panels, only the visible options differ).
+    document.querySelectorAll('input[name=contentCategory]').forEach(function (r) {
+        r.addEventListener('change', function () {
+            document.querySelectorAll('input[name=videoStyle]').forEach(function (v) { v.checked = false; });
+            syncModeCardsFromRadios('videoStyle');
+        });
+    });
+    function refreshVideoStyleVisibility() {
+        var cat = categoryMode();
+        document.getElementById('videoStyleAnime').hidden = cat !== 'anime';
+        document.getElementById('videoStyleFootball').hidden = cat !== 'football';
+    }
+    document.querySelectorAll('input[name=videoStyle]').forEach(function (r) {
+        r.addEventListener('change', refreshOverlayFieldVisibility);
+    });
+    document.getElementById('screenCount').addEventListener('change', refreshScreenCountVisibility);
+    function refreshOverlayFieldVisibility() {
+        document.getElementById('overlayVideoField').hidden = videoStyleMode() !== 'green_screen_overlay';
+        refreshScreenCountVisibility();
+    }
+    function screenCount() {
+        return parseInt(document.getElementById('screenCount').value, 10);
+    }
+    function refreshScreenCountVisibility() {
+        var n = screenCount();
+        document.getElementById('overlayFieldBlue').hidden = n < 2;
+        document.getElementById('overlayFieldRed').hidden = n < 3;
+        refreshScreenEditor();
+    }
+
+    document.querySelectorAll('input[name=narrationMode]').forEach(function (r) {
+        r.addEventListener('change', refreshNarrationVisibility);
+    });
+    function refreshNarrationVisibility() {
+        var mode = document.querySelector('input[name=narrationMode]:checked').value;
+        document.getElementById('narrationAuto').hidden = mode !== 'auto';
+        document.getElementById('narrationTimed').hidden = mode !== 'timed';
+        document.getElementById('narrationManual').hidden = mode !== 'manual';
+        document.getElementById('narrationOptions').hidden = mode === 'skip';
+    }
+
+    // ---- dropzone ----
+    function wireDropzone(zoneId, fileInputId, textId, placeholder) {
+        var zone = document.getElementById(zoneId);
+        var fileInput = document.getElementById(fileInputId);
+        var text = document.getElementById(textId);
+        zone.addEventListener('click', function () { fileInput.click(); });
+        ['dragenter', 'dragover'].forEach(function (evt) {
+            zone.addEventListener(evt, function (e) { e.preventDefault(); zone.classList.add('drag'); });
+        });
+        ['dragleave', 'drop'].forEach(function (evt) {
+            zone.addEventListener(evt, function (e) { e.preventDefault(); zone.classList.remove('drag'); });
+        });
+        zone.addEventListener('drop', function (e) {
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                fileInput.dispatchEvent(new Event('change'));
+            }
+        });
+        fileInput.addEventListener('change', function () {
+            text.textContent = fileInput.files.length ? fileInput.files[0].name : placeholder;
+        });
+        return fileInput;
+    }
+    var videoFile = wireDropzone('dropzone', 'videoFile', 'dropzoneText', 'Cliquez pour choisir une vidéo, ou déposez-la ici');
+    var overlayVideoFileGreen = wireDropzone('overlayDropzoneGreen', 'overlayVideoFileGreen', 'overlayDropzoneTextGreen', 'Cliquez pour choisir la vidéo (écran vert), ou déposez-la ici');
+    var overlayVideoFileBlue = wireDropzone('overlayDropzoneBlue', 'overlayVideoFileBlue', 'overlayDropzoneTextBlue', 'Cliquez pour choisir la vidéo (écran bleu), ou déposez-la ici');
+    var overlayVideoFileRed = wireDropzone('overlayDropzoneRed', 'overlayVideoFileRed', 'overlayDropzoneTextRed', 'Cliquez pour choisir la vidéo (écran rouge), ou déposez-la ici');
+    overlayVideoFileGreen.addEventListener('change', function () { updateScreenBoxPreview('green', overlayVideoFileGreen.files[0]); });
+    overlayVideoFileBlue.addEventListener('change', function () { updateScreenBoxPreview('blue', overlayVideoFileBlue.files[0]); });
+    overlayVideoFileRed.addEventListener('change', function () { updateScreenBoxPreview('red', overlayVideoFileRed.files[0]); });
+
+    // Feeds the local base video straight into the screen-position editor's <video> preview -
+    // no server round-trip needed since the browser can decode the locally chosen file directly.
+    videoFile.addEventListener('change', function () {
+        if (!videoFile.files[0]) return;
+        screenEditorVideo.src = URL.createObjectURL(videoFile.files[0]);
+    });
+    screenEditorVideo.addEventListener('loadedmetadata', function () {
+        // Forces an actual frame to decode/paint - some browsers show a blank frame at t=0.
+        screenEditorVideo.currentTime = Math.min(0.1, screenEditorVideo.duration / 2);
+    });
+    screenEditorVideo.addEventListener('seeked', function () { refreshScreenEditor(); });
+
+    // ---- analyse du SRT ----
+    function parseSrt(text) {
+        var blocks = text.replace(/\r/g, '').split(/\n\s*\n/);
+        var cues = [];
+        blocks.forEach(function (block) {
+            var lines = block.split('\n').filter(function (l) { return l.trim() !== ''; });
+            if (!lines.length) return;
+            var timingIdx = -1;
+            for (var i = 0; i < lines.length; i++) {
+                if (/\d{2}:\d{2}:\d{2}[,.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,.]\d{3}/.test(lines[i])) { timingIdx = i; break; }
+            }
+            if (timingIdx === -1) return;
+            var m = lines[timingIdx].match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
+            if (!m) return;
+            var start = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 1000;
+            var end = (+m[5]) * 3600 + (+m[6]) * 60 + (+m[7]) + (+m[8]) / 1000;
+            var original = lines.slice(timingIdx + 1).join(' ').trim();
+            cues.push({ start: start, end: end, original: original });
+        });
+        return cues;
+    }
+
+    function getSrtText(callback) {
+        var fileInput = document.getElementById('srtFile');
+        if (fileInput.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function (e) { callback(e.target.result); };
+            reader.readAsText(fileInput.files[0]);
+        } else {
+            callback(document.getElementById('srtPaste').value);
+        }
+    }
+
+    function escapeHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function refreshPairingPreview() {
+        getSrtText(function (text) {
+            cachedCues = parseSrt(text || '');
+            var englishLines = document.getElementById('englishLines').value.split('\n')
+                .map(function (l) { return l.trim(); }).filter(function (l) { return l.length; });
+            var box = document.getElementById('pairingPreview');
+            if (!cachedCues.length) { box.innerHTML = ''; return; }
+
+            var rows = cachedCues.map(function (cue, i) {
+                var eng = englishLines[i];
+                var cell = eng ? escapeHtml(eng) : '<span class="pairing-mismatch">(manquant)</span>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + cue.start.toFixed(1) + 's - ' + cue.end.toFixed(1) + 's</td>' +
+                    '<td>' + escapeHtml(cue.original) + '</td><td>' + cell + '</td></tr>';
+            }).join('');
+            var mismatch = englishLines.length !== cachedCues.length
+                ? '<p class="pairing-mismatch">' + cachedCues.length + ' répliques originales mais ' + englishLines.length + ' lignes en anglais - le nombre doit correspondre exactement.</p>'
+                : '<p class="hint">' + cachedCues.length + ' répliques associées.</p>';
+            box.innerHTML = mismatch + '<table class="pairing-table"><tr><th>#</th><th>Temps</th><th>Original</th><th>Anglais</th></tr>' + rows + '</table>';
+        });
+    }
+    document.getElementById('srtFile').addEventListener('change', refreshPairingPreview);
+    document.getElementById('srtPaste').addEventListener('input', refreshPairingPreview);
+    document.getElementById('englishLines').addEventListener('input', refreshPairingPreview);
+
+    // ---- navigation de l'assistant ----
+    function renderWizardNav() {
+        var html = STEP_NAMES.map(function (name, i) {
+            var n = i + 1;
+            var locked = n > maxStepReached;
+            var cls = 'wnode';
+            if (n < currentStep) cls += ' done';
+            else if (n === currentStep) cls += ' active';
+            if (locked) cls += ' locked';
+            var mark = n < currentStep ? '✓' : n;
+            var line = i < STEP_NAMES.length - 1 ? '<span class="wizard-line"></span>' : '';
+            var tag = locked ? 'span' : 'button';
+            var attrs = locked ? '' : ' type="button" onclick="wizGoTo(' + n + ')"';
+            return '<' + tag + ' class="' + cls + '"' + attrs + '><span class="dot">' + mark + '</span>' + name + '</' + tag + '>' + line;
+        }).join('');
+        document.getElementById('wizardNav').innerHTML = html;
+    }
+
+    function showStepError(msg) {
+        var box = document.getElementById('wizStepError');
+        box.textContent = msg;
+        box.hidden = false;
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function clearStepError() { document.getElementById('wizStepError').hidden = true; }
+
+    function showStep(n) {
+        currentStep = n;
+        clearStepError();
+        document.getElementById('advancedScreen').hidden = true;
+        document.querySelectorAll('.wizard-step').forEach(function (s) {
+            s.hidden = parseInt(s.getAttribute('data-step'), 10) !== n;
+        });
+        document.getElementById('wizardNav').hidden = false;
+        renderWizardNav();
+        if (n === 2) refreshVideoStyleVisibility();
+        if (n === 3) refreshOverlayFieldVisibility();
+        if (n === 9) renderSummary();
+        document.getElementById('wizardTop').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function advanceStep() {
+        clearStepError();
+        maxStepReached = Math.max(maxStepReached, currentStep + 1);
+        if (currentStep < TOTAL_STEPS) showStep(currentStep + 1);
+    }
+
+    // Seules les étapes déjà atteintes sont cliquables - impossible de sauter une étape non terminée.
+    window.wizGoTo = function (n) { if (n <= maxStepReached) showStep(n); };
+    window.wizBack = function () { if (currentStep > 1) showStep(currentStep - 1); };
+    window.wizBackToVideoStep = function () {
+        document.getElementById('advancedScreen').hidden = true;
+        showStep(3);
+    };
+
+    function categoryMode() {
+        var el = document.querySelector('input[name=contentCategory]:checked');
+        return el ? el.value : null;
+    }
+    function videoStyleMode() {
+        var el = document.querySelector('input[name=videoStyle]:checked');
+        return el ? el.value : null;
+    }
+    // ---- éditeur visuel des écrans : quadrilatère à 4 coins indépendants (pas juste un rectangle),
+    // pour tracer un écran filmé de biais exactement comme il apparaît, plutôt que taper des pixels.
+    var CORNERS = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
+    var screenBoxState = { green: null, blue: null, red: null };
+    // 'rect' (default, most screens are filmed straight-on) keeps the shape an axis-aligned
+    // rectangle when resizing - only the opposite corner stays anchored, like a normal resize
+    // handle. 'quad' (opt-in via the per-screen toggle) lets each corner move fully independently,
+    // for a screen filmed at an angle.
+    var screenEditMode = { green: 'rect', blue: 'rect', red: 'rect' };
+    var OPPOSITE_CORNER = { topLeft: 'bottomRight', topRight: 'bottomLeft', bottomRight: 'topLeft', bottomLeft: 'topRight' };
+    var quadEls = {};
+
+    function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+    function videoRealSize() { return { w: screenEditorVideo.videoWidth || 0, h: screenEditorVideo.videoHeight || 0 }; }
+    function videoDisplaySize() { return { w: screenEditorVideo.clientWidth || 0, h: screenEditorVideo.clientHeight || 0 }; }
+
+    function pointRealToDisplay(p) {
+        var rs = videoRealSize(), ds = videoDisplaySize();
+        if (!rs.w || !rs.h) return { x: 0, y: 0 };
+        return { x: p.x * (ds.w / rs.w), y: p.y * (ds.h / rs.h) };
+    }
+
+    function defaultRegionFor(color) {
+        var rs = videoRealSize();
+        var presets = {
+            green: { fx: 0.08, fy: 0.08, fw: 0.38, fh: 0.32 },
+            blue: { fx: 0.54, fy: 0.08, fw: 0.38, fh: 0.32 },
+            red: { fx: 0.08, fy: 0.55, fw: 0.38, fh: 0.32 }
+        };
+        var p = presets[color];
+        var x = rs.w * p.fx, y = rs.h * p.fy, w = rs.w * p.fw, h = rs.h * p.fh;
+        return {
+            topLeft: { x: x, y: y }, topRight: { x: x + w, y: y },
+            bottomRight: { x: x + w, y: y + h }, bottomLeft: { x: x, y: y + h }
+        };
+    }
+
+    function quadBoundingBox(region) {
+        var xs = CORNERS.map(function (c) { return region[c].x; });
+        var ys = CORNERS.map(function (c) { return region[c].y; });
+        var minX = Math.min.apply(null, xs), minY = Math.min.apply(null, ys);
+        return { x: minX, y: minY, w: Math.max.apply(null, xs) - minX, h: Math.max.apply(null, ys) - minY };
+    }
+
+    // The standard "4-point image warp" algorithm (Heckbert): computes the 2D projective transform
+    // mapping a w x h rectangle's own corners onto 4 arbitrary target points, expressed as a CSS
+    // matrix3d so the *actual video content* visibly skews into the traced shape live - not just an
+    // abstract outline - mirroring exactly what the backend's ffmpeg perspective filter will do.
+    function quadTransformMatrix3d(corners, w, h) {
+        var p0 = corners.topLeft, p1 = corners.topRight, p2 = corners.bottomRight, p3 = corners.bottomLeft;
+        var dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x;
+        var dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
+        var a, b, c, d, e, f, g, gg, hh;
+        if (Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9) {
+            a = p1.x - p0.x; b = p2.x - p1.x; c = p0.x;
+            d = p1.y - p0.y; e = p2.y - p1.y; f = p0.y;
+            gg = 0; hh = 0;
+        } else {
+            var den = dx1 * dy2 - dx2 * dy1;
+            gg = (dx3 * dy2 - dx2 * dy3) / den;
+            hh = (dx1 * dy3 - dx3 * dy1) / den;
+            a = p1.x - p0.x + gg * p1.x; b = p3.x - p0.x + hh * p3.x; c = p0.x;
+            d = p1.y - p0.y + gg * p1.y; e = p3.y - p0.y + hh * p3.y; f = p0.y;
+        }
+        // Fold in a 1/w, 1/h pre-scale so the transform's "source rectangle" is w x h (the element's
+        // own natural box) rather than a unit square.
+        var m = [a / w, d / w, 0, gg / w, b / h, e / h, 0, hh / h, 0, 0, 1, 0, c, f, 0, 1];
+        return 'matrix3d(' + m.join(',') + ')';
+    }
+
+    function renderScreenBoxPosition(color) {
+        var region = screenBoxState[color];
+        if (!region) return;
+        var el = quadEls[color];
+        var ds = videoDisplaySize();
+        var dispCorners = {};
+        CORNERS.forEach(function (c) { dispCorners[c] = pointRealToDisplay(region[c]); });
+        var bbox = quadBoundingBox(dispCorners);
+
+        el.stage.style.left = bbox.x + 'px';
+        el.stage.style.top = bbox.y + 'px';
+        el.stage.style.width = bbox.w + 'px';
+        el.stage.style.height = bbox.h + 'px';
+        var relCorners = {};
+        CORNERS.forEach(function (c) { relCorners[c] = { x: dispCorners[c].x - bbox.x, y: dispCorners[c].y - bbox.y }; });
+        el.stage.style.transform = quadTransformMatrix3d(relCorners, bbox.w || 1, bbox.h || 1);
+
+        el.svg.setAttribute('viewBox', '0 0 ' + ds.w + ' ' + ds.h);
+        el.outline.setAttribute('points', CORNERS.map(function (c) { return dispCorners[c].x + ',' + dispCorners[c].y; }).join(' '));
+
+        el.handles.topLeft.style.left = dispCorners.topLeft.x + 'px'; el.handles.topLeft.style.top = dispCorners.topLeft.y + 'px';
+        el.handles.topRight.style.left = dispCorners.topRight.x + 'px'; el.handles.topRight.style.top = dispCorners.topRight.y + 'px';
+        el.handles.bottomRight.style.left = dispCorners.bottomRight.x + 'px'; el.handles.bottomRight.style.top = dispCorners.bottomRight.y + 'px';
+        el.handles.bottomLeft.style.left = dispCorners.bottomLeft.x + 'px'; el.handles.bottomLeft.style.top = dispCorners.bottomLeft.y + 'px';
+
+        el.label.style.left = dispCorners.topLeft.x + 'px';
+        el.label.style.top = dispCorners.topLeft.y + 'px';
+        el.dims.style.left = dispCorners.topRight.x + 'px';
+        el.dims.style.top = dispCorners.topRight.y + 'px';
+        var realBbox = quadBoundingBox(region);
+        el.dims.textContent = Math.round(realBbox.w) + '×' + Math.round(realBbox.h);
+
+        var isQuad = screenEditMode[color] === 'quad';
+        el.toggle.style.left = dispCorners.bottomLeft.x + 'px';
+        el.toggle.style.top = dispCorners.bottomLeft.y + 'px';
+        el.toggle.textContent = isQuad ? '✓ Angle activé' : 'Ajuster l\'angle';
+        el.toggle.classList.toggle('active', isQuad);
+        // Diagonal resize cursors make sense for a plain rectangle resize; once corners move
+        // independently a generic grab cursor communicates "goes anywhere" more honestly.
+        el.handles.topLeft.style.cursor = isQuad ? 'grab' : 'nwse-resize';
+        el.handles.bottomRight.style.cursor = isQuad ? 'grab' : 'nwse-resize';
+        el.handles.topRight.style.cursor = isQuad ? 'grab' : 'nesw-resize';
+        el.handles.bottomLeft.style.cursor = isQuad ? 'grab' : 'nesw-resize';
+    }
+
+    /** Collapses the current (possibly skewed) quad back to its own axis-aligned bounding box -
+     * used when switching a screen back to simple rectangle mode. */
+    function snapToRectangle(color) {
+        var bbox = quadBoundingBox(screenBoxState[color]);
+        screenBoxState[color] = {
+            topLeft: { x: bbox.x, y: bbox.y },
+            topRight: { x: bbox.x + bbox.w, y: bbox.y },
+            bottomRight: { x: bbox.x + bbox.w, y: bbox.y + bbox.h },
+            bottomLeft: { x: bbox.x, y: bbox.y + bbox.h }
+        };
+    }
+
+    // Plays that screen's actual chosen overlay clip live inside its own quad, muted and looping,
+    // so positioning it feels like arranging real footage rather than an abstract shape.
+    function updateScreenBoxPreview(color, file) {
+        var el = quadEls[color];
+        if (file) {
+            el.video.src = URL.createObjectURL(file);
+            el.video.play().catch(function () {});
+            el.root.classList.add('has-video');
+        } else {
+            el.video.removeAttribute('src');
+            el.video.load();
+            el.root.classList.remove('has-video');
+        }
+    }
+
+    function activeScreenColors() {
+        var colors = ['green'];
+        if (screenCount() >= 2) colors.push('blue');
+        if (screenCount() >= 3) colors.push('red');
+        return colors;
+    }
+
+    function refreshScreenEditor() {
+        if (videoStyleMode() !== 'green_screen_overlay' || !videoRealSize().w) return;
+        var active = activeScreenColors();
+        ['green', 'blue', 'red'].forEach(function (color) {
+            var el = quadEls[color];
+            if (active.indexOf(color) === -1) { el.root.hidden = true; return; }
+            if (!screenBoxState[color]) screenBoxState[color] = defaultRegionFor(color);
+            el.root.hidden = false;
+            renderScreenBoxPosition(color);
+        });
+    }
+
+    var screenDrag = null;
+    function startScreenDrag(color, mode, clientX, clientY) {
+        screenDrag = {
+            color: color, mode: mode, startX: clientX, startY: clientY,
+            orig: JSON.parse(JSON.stringify(screenBoxState[color]))
+        };
+        quadEls[color].root.classList.add('dragging');
+        document.addEventListener('mousemove', onScreenDragMove);
+        document.addEventListener('mouseup', onScreenDragEnd);
+    }
+    function clampPoint(p, rs) {
+        return { x: Math.max(0, Math.min(p.x, rs.w)), y: Math.max(0, Math.min(p.y, rs.h)) };
+    }
+    function onScreenDragMove(e) {
+        if (!screenDrag) return;
+        var rs = videoRealSize(), ds = videoDisplaySize();
+        if (!ds.w || !ds.h) return;
+        var sx = rs.w / ds.w, sy = rs.h / ds.h;
+        var dx = (e.clientX - screenDrag.startX) * sx;
+        var dy = (e.clientY - screenDrag.startY) * sy;
+        var o = screenDrag.orig;
+
+        if (screenDrag.mode === 'move') {
+            // Clamp the *shared* delta so the whole shape stays inside the frame together, rather
+            // than clamping each corner independently (which would silently deform the shape).
+            CORNERS.forEach(function (c) {
+                dx = Math.max(dx, -o[c].x); dx = Math.min(dx, rs.w - o[c].x);
+                dy = Math.max(dy, -o[c].y); dy = Math.min(dy, rs.h - o[c].y);
+            });
+            var region = {};
+            CORNERS.forEach(function (c) { region[c] = { x: o[c].x + dx, y: o[c].y + dy }; });
+            screenBoxState[screenDrag.color] = region;
+        } else if (screenEditMode[screenDrag.color] === 'quad') {
+            // A single corner moves freely (within the frame) - this is what lets the shape become
+            // a general quadrilateral instead of staying an axis-aligned rectangle. Opt-in only
+            // (see the per-screen toggle) since most screens are filmed straight-on and don't need it.
+            var moved = clampPoint({ x: o[screenDrag.mode].x + dx, y: o[screenDrag.mode].y + dy }, rs);
+            var next = JSON.parse(JSON.stringify(o));
+            next[screenDrag.mode] = moved;
+            screenBoxState[screenDrag.color] = next;
+        } else {
+            // Default 'rect' mode: a plain resize handle - the opposite corner stays anchored and
+            // the shape is rebuilt from the min/max of the two, so it can only ever stay an
+            // axis-aligned rectangle (exactly how this worked before the quad feature existed).
+            var opposite = OPPOSITE_CORNER[screenDrag.mode];
+            var fixed = o[opposite];
+            var draggedTo = clampPoint({ x: o[screenDrag.mode].x + dx, y: o[screenDrag.mode].y + dy }, rs);
+            var minX = Math.min(fixed.x, draggedTo.x), maxX = Math.max(fixed.x, draggedTo.x);
+            var minY = Math.min(fixed.y, draggedTo.y), maxY = Math.max(fixed.y, draggedTo.y);
+            screenBoxState[screenDrag.color] = {
+                topLeft: { x: minX, y: minY }, topRight: { x: maxX, y: minY },
+                bottomRight: { x: maxX, y: maxY }, bottomLeft: { x: minX, y: maxY }
+            };
+        }
+        renderScreenBoxPosition(screenDrag.color);
+    }
+    function onScreenDragEnd() {
+        if (screenDrag) quadEls[screenDrag.color].root.classList.remove('dragging');
+        screenDrag = null;
+        document.removeEventListener('mousemove', onScreenDragMove);
+        document.removeEventListener('mouseup', onScreenDragEnd);
+    }
+
+    (function initQuadEditors() {
+        var tpl = document.getElementById('tpl-quad-editor');
+        var stage = document.getElementById('screenEditorStage');
+        var labels = { green: 'Vert', blue: 'Bleu', red: 'Rouge' };
+        ['green', 'blue', 'red'].forEach(function (color) {
+            var root = tpl.content.firstElementChild.cloneNode(true);
+            root.setAttribute('data-color', color);
+            root.querySelector('.screen-box-label b').textContent = labels[color];
+            root.querySelector('.screen-box-empty').textContent = 'Vidéo écran ' + labels[color].toLowerCase();
+            stage.appendChild(root);
+
+            var el = {
+                root: root,
+                stage: root.querySelector('.quad-stage'),
+                video: root.querySelector('.screen-box-video'),
+                svg: root.querySelector('.quad-svg'),
+                outline: root.querySelector('.quad-outline'),
+                label: root.querySelector('.screen-box-label'),
+                dims: root.querySelector('.screen-box-dims'),
+                toggle: root.querySelector('.quad-mode-toggle'),
+                handles: {}
+            };
+            CORNERS.forEach(function (c) { el.handles[c] = root.querySelector('.quad-handle[data-corner="' + c + '"]'); });
+            quadEls[color] = el;
+
+            el.outline.addEventListener('mousedown', function (e) {
+                e.preventDefault();
+                startScreenDrag(color, 'move', e.clientX, e.clientY);
+            });
+            CORNERS.forEach(function (c) {
+                el.handles[c].addEventListener('mousedown', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    startScreenDrag(color, c, e.clientX, e.clientY);
+                });
+            });
+            el.toggle.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (screenEditMode[color] === 'quad') {
+                    screenEditMode[color] = 'rect';
+                    snapToRectangle(color);
+                } else {
+                    screenEditMode[color] = 'quad';
+                }
+                renderScreenBoxPosition(color);
+            });
+        });
+    })();
+    window.addEventListener('resize', function () { refreshScreenEditor(); });
+
+    // Clicking outside the video preview hides the outline/handles/labels so the user can see a
+    // clean result preview; clicking back on the video restores them. Registered on the capture
+    // phase (not bubble) so it still sees clicks on handles/outline even though those stop
+    // propagation to prevent triggering each other's drag-start.
+    document.addEventListener('mousedown', function (e) {
+        var stage = document.getElementById('screenEditorStage');
+        if (!stage || stage.offsetParent === null) return;
+        stage.classList.toggle('preview-mode', !stage.contains(e.target));
+    }, true);
+
+    function screenRegionReady(color) { return !!screenBoxState[color]; }
+    function readScreenRegion(color) {
+        var r = screenBoxState[color];
+        if (!r) return null;
+        var out = {};
+        CORNERS.forEach(function (c) { out[c] = { x: Math.round(r[c].x), y: Math.round(r[c].y) }; });
+        return out;
+    }
+
+    // ---- validation par étape : "Suivant" n'avance que si l'étape en cours est réellement complète ----
+    function validateStep(n) {
+        if (n === 1) {
+            if (!categoryMode()) return { ok: false, message: 'Choisissez une catégorie de contenu.' };
+            return { ok: true };
+        }
+        if (n === 2) {
+            if (!videoStyleMode()) return { ok: false, message: 'Choisissez le style de la vidéo d\'origine.' };
+            return { ok: true };
+        }
+        if (n === 3) {
+            if (!videoFile.files[0]) return { ok: false, message: 'Choisissez d\'abord une vidéo source.' };
+            if (videoStyleMode() === 'green_screen_overlay') {
+                if (!overlayVideoFileGreen.files[0]) return { ok: false, message: 'Choisissez la vidéo pour l\'écran vert.' };
+                if (!screenRegionReady('green')) return { ok: false, message: 'L\'aperçu de la vidéo n\'est pas encore prêt - patientez un instant puis réessayez.' };
+                if (screenCount() >= 2) {
+                    if (!overlayVideoFileBlue.files[0]) return { ok: false, message: 'Choisissez la vidéo pour l\'écran bleu.' };
+                    if (!screenRegionReady('blue')) return { ok: false, message: 'L\'aperçu de la vidéo n\'est pas encore prêt - patientez un instant puis réessayez.' };
+                }
+                if (screenCount() >= 3) {
+                    if (!overlayVideoFileRed.files[0]) return { ok: false, message: 'Choisissez la vidéo pour l\'écran rouge.' };
+                    if (!screenRegionReady('red')) return { ok: false, message: 'L\'aperçu de la vidéo n\'est pas encore prêt - patientez un instant puis réessayez.' };
+                }
+            }
+            return { ok: true };
+        }
+        if (n === 4) {
+            var mode = narrationMode();
+            if (mode === 'skip') return { ok: true };
+            if (mode === 'auto') {
+                if (!selectedAutoLang()) return { ok: false, message: 'Choisissez la langue parlée dans la vidéo, ou saisissez son code.' };
+                return { ok: true };
+            }
+            if (mode === 'timed') {
+                if (!cachedCues.length) return { ok: false, message: 'Envoyez ou collez le script .srt dans la langue d\'origine, ou utilisez "Passer cette étape".' };
+                var lines = document.getElementById('englishLines').value.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l.length; });
+                if (!lines.length) return { ok: false, message: 'Collez le script en anglais - une ligne par réplique.' };
+                if (lines.length !== cachedCues.length) return { ok: false, message: 'Vous avez ' + cachedCues.length + ' répliques originales mais ' + lines.length + ' lignes en anglais - le nombre doit correspondre exactement.' };
+                return { ok: true };
+            }
+            if (mode === 'manual') {
+                var rows = document.querySelectorAll('#segmentsList .row-item');
+                if (!rows.length) return { ok: false, message: 'Ajoutez au moins un segment, ou utilisez "Passer cette étape".' };
+                for (var i = 0; i < rows.length; i++) {
+                    var r = rows[i], start = r.querySelector('.seg-start').value, end = r.querySelector('.seg-end').value;
+                    if (start === '' || end === '' || !r.querySelector('.seg-text').value.trim()) {
+                        return { ok: false, message: 'Le segment ' + (i + 1) + ' n\'a pas de début, de fin ou de texte.' };
+                    }
+                    if (parseFloat(end) <= parseFloat(start)) return { ok: false, message: 'Le segment ' + (i + 1) + ' se termine avant ou en même temps qu\'il commence.' };
+                }
+                return { ok: true };
+            }
+            return { ok: true };
+        }
+        if (n === 5) {
+            var fxRows = document.querySelectorAll('#effectsList .row-item');
+            for (var j = 0; j < fxRows.length; j++) {
+                if (fxRows[j].querySelector('.fx-start').value === '') return { ok: false, message: 'L\'effet sonore ' + (j + 1) + ' n\'a pas d\'heure de début.' };
+            }
+            return { ok: true };
+        }
+        if (n === 6) {
+            if (musicEnabled.checked && !musicEnabled.disabled && !document.getElementById('musicFile').value) {
+                return { ok: false, message: 'Choisissez une piste, ou désactivez "Ajouter une musique de fond".' };
+            }
+            return { ok: true };
+        }
+        if (n === 7) {
+            var blurRows = document.querySelectorAll('#blurList .row-item');
+            var fields = ['.blur-start', '.blur-end', '.blur-x', '.blur-y', '.blur-w', '.blur-h'];
+            for (var k = 0; k < blurRows.length; k++) {
+                for (var f = 0; f < fields.length; f++) {
+                    if (blurRows[k].querySelector(fields[f]).value === '') return { ok: false, message: 'La zone de flou ' + (k + 1) + ' a un champ vide.' };
+                }
+                if (parseFloat(blurRows[k].querySelector('.blur-end').value) <= parseFloat(blurRows[k].querySelector('.blur-start').value)) {
+                    return { ok: false, message: 'La zone de flou ' + (k + 1) + ' se termine avant ou en même temps qu\'elle commence.' };
+                }
+            }
+            return { ok: true };
+        }
+        if (n === 8) {
+            if (!document.querySelectorAll('.platform-cb:checked').length) return { ok: false, message: 'Choisissez au moins une plateforme.' };
+            return { ok: true };
+        }
+        return { ok: true };
+    }
+
+    window.wizStartFromVideoStep = function () {
+        var result = validateStep(3);
+        if (!result.ok) { showStepError(result.message); return; }
+        var advanced = document.querySelector('input[name=topMode]:checked').value === 'advanced';
+        if (advanced) {
+            clearStepError();
+            document.querySelectorAll('.wizard-step').forEach(function (s) { s.hidden = true; });
+            document.getElementById('wizardNav').hidden = true;
+            document.getElementById('advancedScreen').hidden = false;
+        } else if (videoStyleMode() === 'green_screen_overlay') {
+            // Narration doesn't apply to a two-video composite - there's no single script/speaker
+            // to transcribe or redub - so skip straight past it to effects.
+            document.querySelector('input[name=narrationMode][value=skip]').checked = true;
+            syncModeCardsFromRadios('narrationMode');
+            refreshNarrationVisibility();
+            maxStepReached = Math.max(maxStepReached, 5);
+            showStep(5);
+        } else {
+            maxStepReached = Math.max(maxStepReached, 4);
+            showStep(4);
+        }
+    };
+
+    window.wizNext = function () {
+        var result = validateStep(currentStep);
+        if (!result.ok) { showStepError(result.message); return; }
+        advanceStep();
+    };
+
+    // "Passer cette étape" fonctionne toujours sur les étapes optionnelles - elle réinitialise
+    // l'étape avant d'avancer, pour qu'une saisie à moitié faite ne se glisse jamais dans l'envoi.
+    window.wizSkipNarration = function () {
+        var skipRadio = document.querySelector('input[name=narrationMode][value=skip]');
+        skipRadio.checked = true;
+        syncModeCardsFromRadios('narrationMode');
+        refreshNarrationVisibility();
+        advanceStep();
+    };
+    window.wizSkipEffects = function () {
+        document.getElementById('effectsList').innerHTML = '';
+        advanceStep();
+    };
+    window.wizSkipMusic = function () {
+        musicEnabled.checked = false;
+        document.getElementById('musicFields').hidden = true;
+        advanceStep();
+    };
+    window.wizSkipBlur = function () {
+        document.getElementById('blurList').innerHTML = '';
+        advanceStep();
+    };
+
+    // ---- lecture du formulaire vers le format JSON JobRequest ----
+    function readRows(listId, mapper) {
+        return Array.prototype.map.call(document.querySelectorAll('#' + listId + ' .row-item'), mapper);
+    }
+
+    function readManualSegments() {
+        return readRows('segmentsList', function (row) {
+            var obj = {
+                start: parseFloat(row.querySelector('.seg-start').value),
+                end: parseFloat(row.querySelector('.seg-end').value),
+                text: row.querySelector('.seg-text').value
+            };
+            var v = row.querySelector('.seg-voice').value;
+            if (v) obj.voice = v;
+            return obj;
+        });
+    }
+
+    function readTimedSegments() {
+        var lines = document.getElementById('englishLines').value.split('\n')
+            .map(function (l) { return l.trim(); }).filter(function (l) { return l.length; });
+        return cachedCues.map(function (cue, i) {
+            return { start: cue.start, end: cue.end, text: lines[i] || '' };
+        }).filter(function (seg) { return seg.text; });
+    }
+
+    function narrationMode() {
+        var el = document.querySelector('input[name=narrationMode]:checked');
+        return el ? el.value : 'skip';
+    }
+
+    function readSegments() {
+        var mode = narrationMode();
+        if (mode === 'timed') return readTimedSegments();
+        if (mode === 'manual') return readManualSegments();
+        return [];
+    }
+
+    function selectedAutoLang() {
+        if (autoLang.value === '__custom__') return autoLangCustom.value.trim() || null;
+        return autoLang.value || null;
+    }
+
+    function readEffects() {
+        return readRows('effectsList', function (row) {
+            return {
+                start: parseFloat(row.querySelector('.fx-start').value),
+                file: row.querySelector('.fx-file').value,
+                volume: parseFloat(row.querySelector('.fx-volume').value || '1.0')
+            };
+        });
+    }
+
+    function readBlurRegions() {
+        return readRows('blurList', function (row) {
+            return {
+                start: parseFloat(row.querySelector('.blur-start').value),
+                end: parseFloat(row.querySelector('.blur-end').value),
+                x: parseInt(row.querySelector('.blur-x').value, 10),
+                y: parseInt(row.querySelector('.blur-y').value, 10),
+                width: parseInt(row.querySelector('.blur-w').value, 10),
+                height: parseInt(row.querySelector('.blur-h').value, 10),
+                strength: parseInt(row.querySelector('.blur-strength').value || '18', 10)
+            };
+        });
+    }
+
+    function selectedVoice() {
+        if (jobVoice.value === '__custom__') return jobVoiceCustom.value.trim() || null;
+        return jobVoice.value || null;
+    }
+
+    function buildInstructions() {
+        var platforms = Array.prototype.map.call(document.querySelectorAll('.platform-cb:checked'), function (cb) { return cb.value; });
+        var obj = {
+            voice: selectedVoice(),
+            captions: document.getElementById('captionsCb').checked,
+            loudnessNormalize: document.getElementById('loudnessCb').checked,
+            platforms: platforms,
+            segments: readSegments(),
+            soundEffects: readEffects(),
+            blurRegions: readBlurRegions(),
+            contentCategory: categoryMode(),
+            videoStyle: videoStyleMode()
+        };
+        if (musicEnabled.checked && !musicEnabled.disabled) {
+            obj.music = {
+                file: document.getElementById('musicFile').value,
+                volume: parseFloat(document.getElementById('musicVolume').value || '0.15')
+            };
+        }
+        if (obj.videoStyle === 'green_screen_overlay') {
+            obj.screenRegions = { green: readScreenRegion('green') };
+            if (screenCount() >= 2) obj.screenRegions.blue = readScreenRegion('blue');
+            if (screenCount() >= 3) obj.screenRegions.red = readScreenRegion('red');
+        }
+        if (narrationMode() === 'auto') {
+            var engine = document.querySelector('input[name=translationEngine]:checked').value;
+            obj.autoScript = { sourceLanguage: selectedAutoLang(), translationEngine: engine };
+            if (engine === 'claude' || engine === 'claude-code') {
+                var ctx = document.getElementById('claudeContext').value.trim();
+                if (ctx) obj.autoScript.context = ctx;
+            }
+        }
+        return obj;
+    }
+
+    function renderSummary() {
+        var obj = buildInstructions();
+        var mode = narrationMode();
+        var modeLabel = { skip: 'Aucune (audio d\'origine conservé)', auto: 'Automatique', timed: 'Script minuté', manual: 'Segments manuels' }[mode];
+        var narrationDetail = '';
+        if (mode === 'auto') {
+            var engineLabels = { claude: 'Claude (API)', 'claude-code': 'Claude Code', argos: 'Argos Translate' };
+            var engineLabel = engineLabels[obj.autoScript.translationEngine] || 'Argos Translate';
+            narrationDetail = ' - langue source : ' + (selectedAutoLang() || '?') + ', traduction : ' + engineLabel
+                + ', voix : ' + (obj.voice || 'par défaut');
+        } else if (obj.segments.length) {
+            narrationDetail = ' - ' + obj.segments.length + ' segment(s), voix : ' + (obj.voice || 'par défaut');
+        }
+        var categoryLabels = { anime: 'WeAnimePeaks', football: 'FootbalSoccerRush' };
+        var videoStyleLabels = { anime_overlay_text: 'Texte incrusté à remplacer', anime_dub_audio: 'Voix à redoubler', green_screen_overlay: 'Incrustation fond vert' };
+        var videoStyleLabel = videoStyleLabels[obj.videoStyle] || '(aucun)';
+        var html = '';
+        html += '<dt>Catégorie</dt><dd>' + (categoryLabels[obj.contentCategory] || '(aucune)') + '</dd>';
+        html += '<dt>Type de vidéo</dt><dd>' + videoStyleLabel + '</dd>';
+        html += '<dt>Vidéo</dt><dd>' + escapeHtml(videoFile.files[0] ? videoFile.files[0].name : '(aucune)') + '</dd>';
+        if (obj.videoStyle === 'green_screen_overlay') {
+            var regionText = function (r) { return r ? ' @ ' + r.x + ',' + r.y + ' (' + r.width + 'x' + r.height + ')' : ''; };
+            html += '<dt>Écran vert</dt><dd>' + escapeHtml(overlayVideoFileGreen.files[0] ? overlayVideoFileGreen.files[0].name : '(aucune)') + regionText(obj.screenRegions.green) + '</dd>';
+            if (screenCount() >= 2) {
+                html += '<dt>Écran bleu</dt><dd>' + escapeHtml(overlayVideoFileBlue.files[0] ? overlayVideoFileBlue.files[0].name : '(aucune)') + regionText(obj.screenRegions.blue) + '</dd>';
+            }
+            if (screenCount() >= 3) {
+                html += '<dt>Écran rouge</dt><dd>' + escapeHtml(overlayVideoFileRed.files[0] ? overlayVideoFileRed.files[0].name : '(aucune)') + regionText(obj.screenRegions.red) + '</dd>';
+            }
+        }
+        html += '<dt>Nom</dt><dd>' + escapeHtml(document.getElementById('jobLabel').value || '(aucun)') + '</dd>';
+        html += '<dt>Narration</dt><dd>' + modeLabel + narrationDetail + '</dd>';
+        html += '<dt>Effets sonores</dt><dd>' + obj.soundEffects.length + '</dd>';
+        html += '<dt>Musique</dt><dd>' + (obj.music ? obj.music.file + ' @ ' + obj.music.volume : 'Aucune') + '</dd>';
+        html += '<dt>Zones de flou</dt><dd>' + obj.blurRegions.length + '</dd>';
+        html += '<dt>Plateformes</dt><dd>' + (obj.platforms.join(', ') || '(aucune)') + '</dd>';
+        document.getElementById('summaryBox').innerHTML = html;
+    }
+
+    function isAdvanced() {
+        return !document.getElementById('advancedScreen').hidden;
+    }
+
+    function instructionsJsonString() {
+        return isAdvanced() ? document.getElementById('rawJson').value : JSON.stringify(buildInstructions());
+    }
+
+    function showResult(targetId, errors, warnings, ok) {
+        var box = document.getElementById(targetId);
+        var html = '';
+        if (ok) html += '<div class="alert alert-success">Tout est bon - aucun problème détecté.</div>';
+        if (errors && errors.length) {
+            html += '<div class="alert alert-danger"><strong>Erreurs</strong><ul>' +
+                errors.map(function (e) { return '<li>' + escapeHtml(e) + '</li>'; }).join('') + '</ul></div>';
+        }
+        if (warnings && warnings.length) {
+            html += '<div class="alert alert-warning"><strong>Avertissements</strong><ul>' +
+                warnings.map(function (w) { return '<li>' + escapeHtml(w) + '</li>'; }).join('') + '</ul></div>';
+        }
+        box.innerHTML = html;
+    }
+
+    function withJsonOrError(resultBoxId, fn) {
+        var json;
+        try {
+            json = instructionsJsonString();
+            JSON.parse(json);
+        } catch (e) {
+            showResult(resultBoxId, ['Le JSON des instructions est invalide : ' + e.message], [], false);
+            return;
+        }
+        fn(json);
+    }
+
+    // fetch() cannot report upload progress at all (a real browser API limitation) - XHR can, via
+    // upload.onprogress. Without this, a large video upload looks completely frozen for however
+    // long it takes to reach the server.
+    function uploadWithProgress(url, formData, sendingLabel, onDone, onError) {
+        var wrap = document.getElementById('uploadProgress');
+        var fill = document.getElementById('uploadProgressFill');
+        var label = document.getElementById('uploadProgressLabel');
+        wrap.hidden = false;
+        fill.classList.remove('indeterminate');
+        fill.style.width = '0%';
+        label.textContent = sendingLabel + '... 0 %';
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.upload.addEventListener('progress', function (e) {
+            if (e.lengthComputable) {
+                var pct = Math.round((e.loaded / e.total) * 100);
+                fill.style.width = pct + '%';
+                if (pct < 100) {
+                    label.textContent = sendingLabel + '... ' + pct + ' %';
+                } else {
+                    fill.classList.add('indeterminate');
+                    label.textContent = 'Traitement en cours sur le serveur...';
+                }
+            }
+        });
+        xhr.addEventListener('load', function () {
+            wrap.hidden = true;
+            onDone(xhr);
+        });
+        xhr.addEventListener('error', function () {
+            wrap.hidden = true;
+            onError(new Error('Erreur réseau'));
+        });
+        xhr.send(formData);
+    }
+
+    function runValidate(btnId, resultBoxId) {
+        if (!videoFile.files[0]) { showResult(resultBoxId, ['Choisissez d\'abord un fichier vidéo.'], [], false); return; }
+        withJsonOrError(resultBoxId, function (json) {
+            var fd = new FormData();
+            fd.append('video', videoFile.files[0]);
+            fd.append('instructions', new Blob([json], { type: 'application/json' }), 'instructions.json');
+
+            var btn = document.getElementById(btnId);
+            btn.disabled = true;
+            btn.textContent = 'Vérification...';
+            uploadWithProgress('/jobs/validate', fd, 'Envoi', function (xhr) {
+                btn.disabled = false;
+                btn.textContent = 'Vérifier';
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    showResult(resultBoxId, data.errors, data.warnings, data.ok);
+                } catch (e) {
+                    showResult(resultBoxId, ['Réponse invalide du serveur.'], [], false);
+                }
+            }, function (err) {
+                btn.disabled = false;
+                btn.textContent = 'Vérifier';
+                showResult(resultBoxId, ['Échec de la vérification : ' + err.message], [], false);
+            });
+        });
+    }
+
+    document.getElementById('validateBtn').addEventListener('click', function () { runValidate('validateBtn', 'validateResult'); });
+    document.getElementById('validateBtnAdvanced').addEventListener('click', function () { runValidate('validateBtnAdvanced', 'validateResultAdvanced'); });
+
+    document.getElementById('newJobForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var resultBoxId = isAdvanced() ? 'validateResultAdvanced' : 'validateResult';
+        var submitBtnId = isAdvanced() ? 'submitBtnAdvanced' : 'submitBtn';
+        if (!videoFile.files[0]) { showResult(resultBoxId, ['Choisissez d\'abord un fichier vidéo.'], [], false); return; }
+        withJsonOrError(resultBoxId, function (json) {
+            var fd = new FormData();
+            fd.append('video', videoFile.files[0]);
+            if (videoStyleMode() === 'green_screen_overlay') {
+                if (overlayVideoFileGreen.files[0]) fd.append('overlayVideoGreen', overlayVideoFileGreen.files[0]);
+                if (screenCount() >= 2 && overlayVideoFileBlue.files[0]) fd.append('overlayVideoBlue', overlayVideoFileBlue.files[0]);
+                if (screenCount() >= 3 && overlayVideoFileRed.files[0]) fd.append('overlayVideoRed', overlayVideoFileRed.files[0]);
+            }
+            fd.append('label', document.getElementById('jobLabel').value);
+            fd.append('instructions', new Blob([json], { type: 'application/json' }), 'instructions.json');
+
+            var btn = document.getElementById(submitBtnId);
+            btn.disabled = true;
+            btn.textContent = 'Envoi...';
+            uploadWithProgress('/jobs', fd, 'Envoi', function (xhr) {
+                if (xhr.status >= 200 && xhr.status < 300 && xhr.responseURL) {
+                    window.location = xhr.responseURL;
+                    return;
+                }
+                btn.disabled = false;
+                btn.textContent = 'Envoyer la tâche';
+                showResult(resultBoxId, ['Échec de l\'envoi (HTTP ' + xhr.status + ')'], [], false);
+            }, function (err) {
+                btn.disabled = false;
+                btn.textContent = 'Envoyer la tâche';
+                showResult(resultBoxId, ['Échec de l\'envoi : ' + err.message], [], false);
+            });
+        });
+    });
+
+    renderWizardNav();
+})();
+</script>
+</body>
+</html>

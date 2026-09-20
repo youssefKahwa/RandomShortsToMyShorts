@@ -1,0 +1,7 @@
+target/
+data/
+voices/
+.idea/
+*.iml
+.venv-ml/
+translation_test_output.txt
