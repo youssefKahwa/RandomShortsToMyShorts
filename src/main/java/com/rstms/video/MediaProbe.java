@@ -47,4 +47,20 @@ public class MediaProbe {
                 file.toAbsolutePath().toString()));
         return !out.isBlank();
     }
+
+    /** {width, height} of the first video stream - used to keep a computed crop/composite region
+     * from stepping outside the actual frame. */
+    public int[] videoSize(Path file) {
+        String out = runner.ffprobe(List.of(
+                "-select_streams", "v:0",
+                "-show_entries", "stream=width,height",
+                "-of", "csv=p=0:s=x",
+                file.toAbsolutePath().toString()));
+        String[] parts = out.trim().split("x");
+        try {
+            return new int[]{Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim())};
+        } catch (Exception e) {
+            throw new FfmpegRunner.FfmpegException("Could not read the video size of " + file + " (ffprobe said: '" + out + "')");
+        }
+    }
 }

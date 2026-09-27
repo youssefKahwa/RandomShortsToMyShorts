@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
@@ -112,6 +113,7 @@ public class JobController {
                           @RequestParam(value = "overlayVideoRed", required = false) MultipartFile overlayVideoRed,
                           @RequestParam("instructions") MultipartFile instructions,
                           @RequestParam(value = "label", required = false) String label,
+                          MultipartHttpServletRequest multipartRequest,
                           RedirectAttributes redirect) throws Exception {
         String id = UUID.randomUUID().toString().substring(0, 8);
         String sourceVideoName = "source" + extensionOf(video.getOriginalFilename());
@@ -131,10 +133,16 @@ public class JobController {
         saveOverlayIfPresent(inputDir, "blue", overlayVideoBlue, overlayVideoNames);
         saveOverlayIfPresent(inputDir, "red", overlayVideoRed, overlayVideoNames);
 
+        // "Incrustations" image elements are a dynamic, unbounded list (unlike the fixed 3 screen
+        // colors above), so they arrive as fields keyed "overlayImage_<elementId>" instead of fixed
+        // @RequestParam names - read straight off the raw multipart request for those.
+        Map<String, String> overlayImageNames = new LinkedHashMap<>();
+        saveOverlayImages(inputDir, multipartRequest, overlayImageNames);
+
         extractThumbnailBestEffort(id, videoPath);
 
         JobRequest request = mapper.readValue(inputDir.resolve("instructions.json").toFile(), JobRequest.class);
-        Job job = newJob(id, sourceVideoName, overlayVideoNames, label, request);
+        Job job = newJob(id, sourceVideoName, overlayVideoNames, overlayImageNames, label, request);
         store.save(job);
         queue.submit(id);
 
@@ -148,6 +156,19 @@ public class JobController {
         String name = "overlay_" + color + extensionOf(file.getOriginalFilename());
         file.transferTo(inputDir.resolve(name).toAbsolutePath().toFile());
         overlayVideoNames.put(color, name);
+    }
+
+    private void saveOverlayImages(Path inputDir, MultipartHttpServletRequest multipartRequest,
+                                    Map<String, String> overlayImageNames) throws IOException {
+        for (Map.Entry<String, List<MultipartFile>> e : multipartRequest.getMultiFileMap().entrySet()) {
+            if (!e.getKey().startsWith("overlayImage_")) continue;
+            String elementId = e.getKey().substring("overlayImage_".length());
+            MultipartFile file = e.getValue().isEmpty() ? null : e.getValue().get(0);
+            if (file == null || file.isEmpty()) continue;
+            String name = "sticker_" + elementId + extensionOf(file.getOriginalFilename());
+            file.transferTo(inputDir.resolve(name).toAbsolutePath().toFile());
+            overlayImageNames.put(elementId, name);
+        }
     }
 
     /** Checks a video + instructions pair without creating a job - the "Validate" button's endpoint. */
@@ -202,6 +223,12 @@ public class JobController {
                 Files.copy(oldOverlay, newInput.resolve(e.getValue()), StandardCopyOption.REPLACE_EXISTING);
             }
         }
+        for (Map.Entry<String, String> e : old.getOverlayImageNames().entrySet()) {
+            Path oldImage = store.inputDir(id).resolve(e.getValue());
+            if (Files.isRegularFile(oldImage)) {
+                Files.copy(oldImage, newInput.resolve(e.getValue()), StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
 
         Path oldThumb = store.workDir(id).resolve("thumb.jpg");
         if (Files.isRegularFile(oldThumb)) {
@@ -209,7 +236,8 @@ public class JobController {
         }
 
         JobRequest request = mapper.readValue(instructionsJson, JobRequest.class);
-        Job job = newJob(newId, old.getSourceVideoName(), old.getOverlayVideoNames(), old.getLabel(), request);
+        Job job = newJob(newId, old.getSourceVideoName(), old.getOverlayVideoNames(), old.getOverlayImageNames(),
+                old.getLabel(), request);
         store.save(job);
         queue.submit(newId);
 
@@ -217,7 +245,8 @@ public class JobController {
         return "redirect:/jobs/{id}";
     }
 
-    private Job newJob(String id, String sourceVideoName, Map<String, String> overlayVideoNames, String label, JobRequest request) {
+    private Job newJob(String id, String sourceVideoName, Map<String, String> overlayVideoNames,
+                        Map<String, String> overlayImageNames, String label, JobRequest request) {
         Job job = new Job();
         job.setId(id);
         job.setLabel(label == null || label.isBlank() ? null : label.trim());
@@ -225,6 +254,7 @@ public class JobController {
         job.setStage("en attente");
         job.setSourceVideoName(sourceVideoName);
         job.setOverlayVideoNames(overlayVideoNames);
+        job.setOverlayImageNames(overlayImageNames);
         job.setCreatedAt(Instant.now());
         job.setUpdatedAt(Instant.now());
         job.setPlatforms(request.getPlatforms());

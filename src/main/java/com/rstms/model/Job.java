@@ -16,6 +16,9 @@ public class Job {
     /** For a "green_screen_overlay" job: "green"/"blue"/"red" -> the overlay clip composited onto
      * that colored screen area. "green" is mandatory when this style is used; the others optional. */
     private Map<String, String> overlayVideoNames = new LinkedHashMap<>();
+    /** elementId (from an "Incrustations" overlayElements entry) -> saved PNG filename, for
+     * image-type overlay elements. Available regardless of videoStyle. */
+    private Map<String, String> overlayImageNames = new LinkedHashMap<>();
     private Instant createdAt;
     private Instant updatedAt;
     private List<String> warnings = new ArrayList<>();
@@ -36,6 +39,8 @@ public class Job {
     public void setSourceVideoName(String v) { this.sourceVideoName = v; }
     public Map<String, String> getOverlayVideoNames() { return overlayVideoNames; }
     public void setOverlayVideoNames(Map<String, String> v) { this.overlayVideoNames = v; }
+    public Map<String, String> getOverlayImageNames() { return overlayImageNames; }
+    public void setOverlayImageNames(Map<String, String> v) { this.overlayImageNames = v; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant v) { this.createdAt = v; }
     public Instant getUpdatedAt() { return updatedAt; }

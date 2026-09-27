@@ -1,10 +1,14 @@
 package com.rstms.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rstms.model.ChromaKeySpec;
 import com.rstms.model.GreenScreenSpec;
 import com.rstms.model.Job;
 import com.rstms.model.JobRequest;
 import com.rstms.model.JobStatus;
+import com.rstms.model.LightingEffectSpec;
+import com.rstms.model.OverlayElementSpec;
+import com.rstms.model.ScreenRegionSpec;
 import com.rstms.model.SegmentSpec;
 import com.rstms.model.SoundEffectSpec;
 import com.rstms.video.MediaProbe;
@@ -128,6 +132,24 @@ public class JobProcessor {
         }
         Path greenOverlayVideo = overlayVideos.get("green");
 
+        // "Incrustations" overlay elements apply regardless of videoStyle - resolve each image
+        // element's uploaded PNG the same way the screen overlay videos are resolved above.
+        Map<String, Path> overlayImages = new LinkedHashMap<>();
+        for (OverlayElementSpec el : request.getOverlayElements()) {
+            if (!"image".equals(el.getType())) continue;
+            String filename = job.getOverlayImageNames().get(el.getId());
+            if (filename == null) {
+                throw new IllegalArgumentException(
+                        "Une incrustation image ('" + el.getId() + "') n'a pas de fichier envoyé.");
+            }
+            Path p = input.resolve(filename);
+            if (!Files.isRegularFile(p)) {
+                throw new IllegalArgumentException(
+                        "L'image d'incrustation ('" + el.getId() + "') est introuvable : " + p);
+            }
+            overlayImages.put(el.getId(), p);
+        }
+
         if (request.getAutoScript() != null && request.getSegments().isEmpty()) {
             // Fails fast on a missing language/API key before spending minutes on transcription -
             // the whole point of validating anything up front.
@@ -204,11 +226,52 @@ public class JobProcessor {
             captionsSrt = captionWriter.write(request.getSegments(), work.resolve("captions.srt"));
         }
 
-        GreenScreenSpec greenScreen = request.getGreenScreen() != null ? request.getGreenScreen() : new GreenScreenSpec();
+        Map<String, ChromaKeySpec> chromaKey = new LinkedHashMap<>(request.getChromaKey());
+        // Legacy fallback: an older job's instructions.json may still carry the green-only
+        // GreenScreenSpec instead of the new per-color chromaKey map - honor it for "green" when
+        // the new map has no entry of its own, so a resubmit of an old job keeps behaving the same.
+        if (!chromaKey.containsKey("green") && request.getGreenScreen() != null) {
+            GreenScreenSpec legacy = request.getGreenScreen();
+            ChromaKeySpec converted = new ChromaKeySpec();
+            converted.setColor(legacy.getColor());
+            converted.setSimilarity(legacy.getSimilarity());
+            converted.setBlend(legacy.getBlend());
+            chromaKey.put("green", converted);
+        }
 
         touch(job, "composition de la vidéo");
+        Path masterVideo = work.resolve("master.mp4");
+        int[] frameSize = probe.videoSize(sourceVideo);
+        Map<String, LightingEffectSpec> lighting = request.getLighting();
         videoComposer.compose(sourceVideo, mixedAudio, captionsSrt, request.getBlurRegions(),
-                overlayVideos, request.getScreenRegions(), greenScreen, videoDuration, work.resolve("master.mp4"));
+                overlayVideos, request.getScreenRegions(), chromaKey, lighting, request.getTvLook(), request.getOverlayElements(),
+                overlayImages, request.getFinishing(), frameSize[0], frameSize[1],
+                request.getSourceRotation(), request.getOverlayRotations(), videoDuration, masterVideo);
+
+        if (!overlayVideos.isEmpty()) {
+            // Catches the single most damning "this is a green-screen composite" tell - a sliver of
+            // raw, un-keyed screen color still visible at a screen's edge in the actual delivered
+            // video - so it's surfaced as an actionable warning instead of only being found by
+            // someone watching closely (or by the audience).
+            touch(job, "vérification des bords d'écran");
+            // verifyScreenEdges reads the REAL (already-rotated) composed video, so it needs the
+            // same rotated coordinates compose() just used internally, not the raw traced ones.
+            Map<String, ScreenRegionSpec> regionsForVerification = videoComposer.rotateScreenRegions(
+                    request.getScreenRegions(), request.getSourceRotation(), frameSize[0], frameSize[1]);
+            // Where each lit screen's ambient light may be drawn: everything outside its TV frame. The
+            // check must ignore those pixels - a TV showing a football pitch lights the wall green,
+            // which is the right look but reads as "key color" to it.
+            Map<String, ScreenRegionSpec> litFrames = new LinkedHashMap<>();
+            for (String color : overlayVideos.keySet()) {
+                LightingEffectSpec light = lighting != null ? lighting.get(color) : null;
+                if (light == null || !light.isEnabled() || !(light.isBacklightEnabled() || light.isShadowEnabled())) continue;
+                ScreenRegionSpec litFrame = light.getFrame() != null ? light.getFrame() : request.getScreenRegions().get(color);
+                if (litFrame != null) litFrames.put(color, litFrame);
+            }
+            litFrames = videoComposer.rotateScreenRegions(litFrames, request.getSourceRotation(), frameSize[0], frameSize[1]);
+            job.getWarnings().addAll(videoComposer.verifyScreenEdges(
+                    masterVideo, new ArrayList<>(overlayVideos.keySet()), regionsForVerification, chromaKey, litFrames, videoDuration));
+        }
 
         job.setStatus(JobStatus.REVIEW);
         touch(job, "prêt pour vérification");
