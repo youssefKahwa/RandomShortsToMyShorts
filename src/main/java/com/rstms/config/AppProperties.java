@@ -78,6 +78,10 @@ public class AppProperties {
         private String ffmpegLoglevel = "error";
         /** Bounds how many jobs run at once - ffmpeg is CPU-heavy, tune to your machine. */
         private int maxConcurrentJobs = 2;
+        // ffmpeg's drawtext filter needs an explicit fontfile on this machine rather than relying
+        // on fontconfig name resolution - same absolute-path convention as piper.binary/voices-dir.
+        private String drawtextFontfileBold = "C:/Windows/Fonts/arialbd.ttf";
+        private String drawtextFontfileRegular = "C:/Windows/Fonts/arial.ttf";
         public String getFfmpegBinary() { return ffmpegBinary; }
         public void setFfmpegBinary(String v) { this.ffmpegBinary = v; }
         public String getFfprobeBinary() { return ffprobeBinary; }
@@ -86,6 +90,10 @@ public class AppProperties {
         public void setFfmpegLoglevel(String v) { this.ffmpegLoglevel = v; }
         public int getMaxConcurrentJobs() { return maxConcurrentJobs; }
         public void setMaxConcurrentJobs(int v) { this.maxConcurrentJobs = v; }
+        public String getDrawtextFontfileBold() { return drawtextFontfileBold; }
+        public void setDrawtextFontfileBold(String v) { this.drawtextFontfileBold = v; }
+        public String getDrawtextFontfileRegular() { return drawtextFontfileRegular; }
+        public void setDrawtextFontfileRegular(String v) { this.drawtextFontfileRegular = v; }
     }
 
     /** Shared render settings; a platform's own PlatformConfig can override crf/audio bitrate/duration cap. */

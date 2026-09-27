@@ -167,9 +167,112 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); o
    a preview of the chosen video, since a screen filmed at an angle appears skewed, not straight-on.
    Each quad shows its own assigned overlay clip live, warped in real time (CSS matrix3d) to match
    the traced shape - mirroring exactly what the backend's ffmpeg perspective filter will do. */
+/* Two-column layout for the screen-placement step: video workspace on the left, that screen's own
+   chroma-key/lighting tuning panels stacked on the right - wraps to a single column (video above
+   panels) on narrow viewports rather than squeezing both side by side. */
+.screen-editor-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.screen-editor-layout-video { flex: 1 1 380px; min-width: 280px; max-width: 100%; }
+.screen-editor-layout-panels { flex: 1 1 320px; min-width: 260px; display: flex; flex-direction: column; gap: 14px; }
 .screen-editor-stage { position: relative; display: inline-block; max-width: 100%; background: #000; border-radius: var(--radius); overflow: hidden; line-height: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
 .screen-editor-stage video { display: block; max-width: 100%; max-height: 60vh; height: auto; }
 .quad-editor { position: absolute; inset: 0; pointer-events: none; }
+/* Wraps the (perspective-warped) overlay video. In the lighting step it gets a mask-image computed from
+   the base frame (updateKeyMask) so the video shows only where the TV is green, like the render. */
+.quad-key-mask {
+  position: absolute; inset: 0; pointer-events: none;
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+/* Ambient-lighting live preview - the same light shape the final render uses (LightingMask on the
+   Java side, lightingShape/lightingGlowAlpha in index.html). Painted ABOVE the video: both canvases
+   are fully transparent inside the TV frame, so the light only ever shows outside it. Sized,
+   positioned and drawn by layoutLightingPreview(); hidden outside the lighting step. */
+.quad-glow-canvas, .quad-shadow-canvas { position: absolute; pointer-events: none; display: none; }
+
+/* "Rendu TV" preview layers (layoutTvLookPreview), inside .quad-key-mask so they only show on green
+   like the render's. Darkening = black with the mask as alpha, reflection = white; the grain is added
+   and subtracted exactly by two opaque canvases. The colour map + blur go on .quad-fit (whole fitted
+   box), whose black background stands for the render's black padding, lifted by the colour map too. */
+.tv-dark-canvas, .tv-glare-canvas, .tv-grain-plus, .tv-grain-minus { position: absolute; pointer-events: none; display: none; }
+.tv-grain-plus { mix-blend-mode: plus-lighter; }
+.tv-grain-minus { mix-blend-mode: difference; }
+.quad-fit.tvlook-on { background: #000; }
+.tvlook-group-title {
+  margin: 14px 0 2px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.tvlook-preset.active, .tvlook-compare.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* The TV frame (lighting and TV-look steps): where the light and the glass effects start. Hidden
+   unless that step's effect is on with a frame placed (.has-light-frame, see renderLightFrame). */
+.light-frame-outline, .light-frame-handle, .light-frame-label, .light-frame-controls { display: none; }
+.screen-editor-stage[data-mode="lighting"] .quad-editor.has-light-frame .light-frame-outline,
+.screen-editor-stage[data-mode="tvlook"] .quad-editor.has-light-frame .light-frame-outline { display: inline; }
+.screen-editor-stage[data-mode="lighting"] .quad-editor.has-light-frame .light-frame-handle,
+.screen-editor-stage[data-mode="lighting"] .quad-editor.has-light-frame .light-frame-label,
+.screen-editor-stage[data-mode="lighting"] .quad-editor.has-light-frame .light-frame-controls,
+.screen-editor-stage[data-mode="tvlook"] .quad-editor.has-light-frame .light-frame-handle,
+.screen-editor-stage[data-mode="tvlook"] .quad-editor.has-light-frame .light-frame-label,
+.screen-editor-stage[data-mode="tvlook"] .quad-editor.has-light-frame .light-frame-controls { display: block; }
+.light-frame-outline {
+  fill: rgba(245, 158, 11, 0.001); stroke: #f59e0b; stroke-width: 2px;
+  cursor: move; pointer-events: all; vector-effect: non-scaling-stroke;
+}
+.quad-editor.dragging .light-frame-outline { stroke: #fbbf24; }
+.light-frame-handle {
+  position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: #f59e0b;
+  border: 2px solid #fff; border-radius: 3px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  cursor: pointer; pointer-events: all; transition: transform 0.1s ease;
+}
+.light-frame-handle:hover { transform: scale(1.15); }
+.light-frame-label {
+  position: absolute; transform: translate(0, calc(-100% - 6px)); white-space: nowrap;
+  font-size: 10.5px; font-weight: 700; color: #1f1300; background: #f59e0b;
+  padding: 2px 8px; border-radius: 999px; pointer-events: none; line-height: 1.4;
+}
+.light-frame-controls { position: absolute; transform: translate(0, 8px); pointer-events: all; line-height: 1.4; }
+.light-frame-controls .quad-mode-toggle { position: static; transform: none; }
+
+/* No-light zones (lighting step): boxes drawn over things in front of the TV - no glow or shadow
+   inside. Created in JS (renderLightZones); shown with the frame. */
+.light-zone-outline, .light-zone-handle, .light-zone-label, .light-zone-controls { display: none; }
+.screen-editor-stage[data-mode="lighting"] .quad-editor.has-light-frame .light-zone-outline { display: inline; }
+.screen-editor-stage[data-mode="lighting"] .quad-editor.has-light-frame .light-zone-handle,
+.screen-editor-stage[data-mode="lighting"] .quad-editor.has-light-frame .light-zone-label,
+.screen-editor-stage[data-mode="lighting"] .quad-editor.has-light-frame .light-zone-controls { display: block; }
+.light-zone-outline {
+  fill: rgba(239, 68, 68, 0.14); stroke: #ef4444; stroke-width: 1.5px; stroke-dasharray: 6 4;
+  cursor: move; pointer-events: all; vector-effect: non-scaling-stroke;
+}
+.light-zone-handle {
+  position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: #ef4444;
+  border: 2px solid #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  cursor: pointer; pointer-events: all; transition: transform 0.1s ease;
+}
+.light-zone-handle:hover { transform: scale(1.15); }
+.light-zone-label {
+  position: absolute; transform: translate(0, calc(-100% - 5px)); white-space: nowrap;
+  font-size: 10px; font-weight: 700; color: #fff; background: #ef4444;
+  padding: 1px 7px; border-radius: 999px; pointer-events: none; line-height: 1.4;
+}
+.light-zone-controls { position: absolute; transform: translate(0, 7px); pointer-events: all; line-height: 1.4; display: none; gap: 4px; }
+.screen-editor-stage[data-mode="lighting"] .quad-editor.has-light-frame .light-zone-controls { display: flex; }
+.light-zone-controls .quad-mode-toggle { position: static; transform: none; }
+.light-zone-delete { padding: 3px 7px; }
+.lighting-zone-title { font-size: 12.5px; color: var(--text-muted); }
+
+/* Lighting and TV-look steps: the video box is fixed (placed in step 3) - its editing chrome is hidden
+   and it no longer takes clicks, so only the TV frame can be moved. */
+.screen-editor-stage[data-mode="lighting"] .quad-outline,
+.screen-editor-stage[data-mode="lighting"] .quad-handle,
+.screen-editor-stage[data-mode="lighting"] .screen-box-label,
+.screen-editor-stage[data-mode="lighting"] .screen-box-readout,
+.screen-editor-stage[data-mode="lighting"] .quad-bottom-controls,
+.screen-editor-stage[data-mode="tvlook"] .quad-outline,
+.screen-editor-stage[data-mode="tvlook"] .quad-handle,
+.screen-editor-stage[data-mode="tvlook"] .screen-box-label,
+.screen-editor-stage[data-mode="tvlook"] .screen-box-readout,
+.screen-editor-stage[data-mode="tvlook"] .quad-bottom-controls { display: none; }
 .quad-stage {
   position: absolute; transform-origin: 0 0; overflow: hidden; background: #000;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
@@ -230,10 +333,146 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); o
 .screen-editor-stage.preview-mode .quad-svg,
 .screen-editor-stage.preview-mode .quad-handle,
 .screen-editor-stage.preview-mode .screen-box-label,
-.screen-editor-stage.preview-mode .screen-box-dims,
-.screen-editor-stage.preview-mode .quad-mode-toggle {
+.screen-editor-stage.preview-mode .screen-box-readout,
+.screen-editor-stage.preview-mode .quad-bottom-controls,
+.screen-editor-stage.preview-mode .quad-editor.has-light-frame .light-frame-handle,
+.screen-editor-stage.preview-mode .quad-editor.has-light-frame .light-frame-label,
+.screen-editor-stage.preview-mode .quad-editor.has-light-frame .light-frame-controls,
+.screen-editor-stage.preview-mode .quad-editor.has-light-frame .light-zone-handle,
+.screen-editor-stage.preview-mode .quad-editor.has-light-frame .light-zone-label,
+.screen-editor-stage.preview-mode .quad-editor.has-light-frame .light-zone-controls {
   display: none;
 }
+
+/* Editable X/Y/W/H readout - replaces the old read-only dims badge. Rect-mode only (a single
+   x/y/w/h doesn't map onto 4 independently-moved quad corners), disabled otherwise in JS. */
+.screen-box-readout {
+  position: absolute; display: flex; gap: 3px; transform: translate(calc(-100% - 2px), 2px);
+  pointer-events: all;
+}
+.screen-box-readout input {
+  width: 42px; font-size: 10px; font-variant-numeric: tabular-nums; text-align: center;
+  background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 6px;
+  color: #fff; padding: 2px 1px;
+}
+.screen-box-readout input:disabled { opacity: 0.4; }
+.quad-bottom-controls {
+  position: absolute; transform: translate(2px, -100%) translate(0, -2px);
+  display: flex; align-items: center; gap: 4px; pointer-events: all;
+}
+.quad-copy-btn {
+  font-size: 12px; line-height: 1; color: #fff; background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 999px; padding: 3px 7px; cursor: pointer;
+}
+.quad-copy-btn:hover { background: rgba(0, 0, 0, 0.75); }
+.quad-copy-target {
+  font-size: 10.5px; background: rgba(0, 0, 0, 0.55); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 999px; padding: 2px 6px;
+}
+
+/* Rotation controls (source video + per-overlay clip) - a small live-rotating preview thumbnail
+   plus one cycling button (0->90->180->270->0), so clicking it visibly does something. This preview
+   is a SEPARATE <video> fed the same blob URL, purely cosmetic - the geometry-facing editors
+   (screenEditorVideo, the quad editor's own video) deliberately stay unrotated, since region
+   coordinates are always given relative to the original unrotated frame. */
+.rotate-control { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.rotate-control-sm { margin-top: 8px; }
+.rotate-preview-box {
+  width: 84px; height: 84px; flex: 0 0 auto; overflow: hidden; background: #000;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+}
+.rotate-preview-video { width: 100%; height: 100%; object-fit: contain; transition: transform 0.2s ease; }
+.rotate-cycle-btn { white-space: nowrap; }
+
+/* Per-screen chroma-key tuning (sliders + eyedropper + auto-detect) - deliberately NOT inside the
+   transform-warped .quad-editor box, since that box is skewed/sized to the shape itself. */
+.chroma-tuning { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.chroma-tuning-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.chroma-swatch { width: 20px; height: 20px; border-radius: 5px; border: 1px solid var(--border); display: inline-block; background: #000; }
+.chroma-slider-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.chroma-slider-row label { flex: 0 0 150px; font-size: 12.5px; color: var(--text-muted); display: flex; justify-content: space-between; gap: 6px; }
+.chroma-slider-row input[type="range"] { flex: 1; }
+.chroma-eyedropper.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.screen-editor-stage.eyedropper-active #screenEditorVideo { cursor: crosshair; }
+/* While sampling a color, the quad editors' own interactive overlay elements must stop intercepting
+   clicks so they reach the real video pixel underneath instead. */
+.screen-editor-stage.eyedropper-active .quad-outline,
+.screen-editor-stage.eyedropper-active .quad-handle,
+.screen-editor-stage.eyedropper-active .quad-bottom-controls,
+.screen-editor-stage.eyedropper-active .screen-box-readout {
+  pointer-events: none;
+}
+
+/* Guided one-screen-at-a-time sub-nav (only shown with 2+ active screens) */
+.screen-sub-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.screen-sub-nav-label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.screen-undo-redo { margin-left: auto; display: flex; gap: 6px; }
+.quad-editor.ghosted { opacity: 0.35; pointer-events: none; }
+/* Children that opt back in (outline, handles, frame) must not stay grabbable on a dimmed screen. */
+.quad-editor.ghosted * { pointer-events: none; }
+
+/* "Incrustations" step - text/PNG stickers, simple axis-aligned drag+resize (no perspective warp). */
+.sticker-box {
+  position: absolute; box-sizing: border-box; border: 1.5px dashed rgba(255, 255, 255, 0.85);
+  cursor: move; min-width: 20px; min-height: 20px;
+}
+.sticker-box.dragging { border-color: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5); }
+.sticker-box-body {
+  position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 14px; text-align: center; padding: 2px; pointer-events: none;
+  white-space: nowrap;
+}
+.sticker-box-body img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.sticker-box-body.preset-bold_outline { text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000; }
+.sticker-box-body.preset-highlight_box { background: rgba(30, 144, 255, 0.85); border-radius: 4px; }
+.sticker-box-body.preset-bottom_banner { background: rgba(0, 0, 0, 0.6); width: 100% !important; left: 0 !important; }
+.sticker-box-body.preset-neon_glow { text-shadow: 0 0 6px currentColor, 0 0 12px currentColor; }
+.sticker-box-label {
+  position: absolute; top: -20px; left: 0; font-size: 10px; font-weight: 600; color: #fff;
+  background: rgba(0, 0, 0, 0.55); padding: 2px 6px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+}
+.sticker-handle {
+  position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.55); border-radius: 50%; cursor: nwse-resize;
+}
+#stickerNoVideoHint:empty { display: none; }
+
+/* Blur zone editor - same axis-aligned drag+resize shape as stickers, but the box itself shows a
+   REAL live blur of the video content behind it (backdrop-filter), not just a placeholder - the
+   closest thing to an exact preview any of these editors offers, since it's the actual browser
+   compositor blurring the actual pixels rather than an approximation. */
+.blur-box {
+  position: absolute; box-sizing: border-box; border: 1.5px dashed rgba(255, 255, 255, 0.85);
+  cursor: move; min-width: 20px; min-height: 20px; background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.blur-box.dragging { border-color: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5); }
+.blur-box-label {
+  position: absolute; top: -20px; left: 0; font-size: 10px; font-weight: 600; color: #fff;
+  background: rgba(0, 0, 0, 0.55); padding: 2px 6px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+}
+.blur-box-handle {
+  position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.55); border-radius: 50%; cursor: nwse-resize;
+}
+#blurNoVideoHint:empty { display: none; }
+
+/* "Finition & qualité" live preview - a browser-side CSS approximation of the ffmpeg look presets
+   (contrast/saturate via the CSS filter property, vignette via a radial-gradient overlay, grain via
+   a tiled noise-texture overlay, and a soft warm/cool tint for "cinematic") so the user can compare
+   styles before choosing rather than picking blind. Deliberately labelled as approximate in the UI:
+   CSS can't reproduce ffmpeg's per-channel gamma split, real film grain, or the enhance pass's
+   sharpen/denoise at all - only contrast/saturation (its most visible component) is represented. */
+.finishing-preview-stage { position: relative; display: inline-block; max-width: 300px; background: #000; border-radius: var(--radius); overflow: hidden; line-height: 0; }
+.finishing-preview-stage video { display: block; max-width: 100%; max-height: 50vh; height: auto; transition: filter 0.2s ease; }
+.finishing-vignette, .finishing-grain, .finishing-tint {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s ease;
+}
+.finishing-vignette { background: radial-gradient(circle, transparent 35%, rgba(0, 0, 0, 0.85) 100%); }
+.finishing-grain { background-repeat: repeat; background-size: 96px 96px; mix-blend-mode: overlay; }
+.finishing-tint { background: linear-gradient(135deg, rgba(255, 140, 0, 0.35), transparent 45%, rgba(0, 170, 200, 0.3)); mix-blend-mode: soft-light; }
+#finishingNoVideoHint:empty { display: none; }
 
 /* Repeatable rows (segments / effects / blur) */
 .row-list { display: flex; flex-direction: column; gap: 10px; }

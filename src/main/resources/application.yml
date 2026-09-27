@@ -54,6 +54,10 @@ app:
     ffprobe-binary: ffprobe
     ffmpeg-loglevel: error
     max-concurrent-jobs: 2
+    # Used by the "Incrustations" text-overlay presets (drawtext) - explicit path since this
+    # machine's ffmpeg build isn't relying on fontconfig name resolution for these.
+    drawtext-fontfile-bold: C:/Windows/Fonts/arialbd.ttf
+    drawtext-fontfile-regular: C:/Windows/Fonts/arial.ttf
   video:
     width: 1080
     height: 1920
